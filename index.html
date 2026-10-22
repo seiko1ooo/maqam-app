@@ -131,6 +131,14 @@ h2 { font: 600 15px/1.4 var(--body); margin: 20px 0 8px; }
 .ph .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
 .ph .on { font: 500 14px var(--body); color: var(--muted); }
 .ph .sh { display: block; font-size: 12.5px; color: var(--gold); margin-top: 2px; }
+.tg { display: inline-block; font: 600 12px/1.6 var(--body); border-radius: 999px; padding: 0 9px; margin-inline-start: 6px; vertical-align: middle; }
+.t-music { background: var(--gold-soft); color: var(--gold); }
+.t-voice { background: var(--accent); color: var(--accent-fg); }
+.t-unknown { background: var(--line); color: var(--muted); }
+.strip i.t-music { background: var(--gold); }
+.strip i.t-voice { background: var(--accent); }
+.strip i.t-unknown { background: var(--muted); opacity: .55; }
+.ph time small { display: block; line-height: 1.4; }
 .foot { font-size: 12.5px; color: var(--muted); margin: 0; }
 @media (prefers-reduced-motion: reduce) { .progress i { transition: none; } }
 @media (max-width: 360px) { .inputs { grid-template-columns: 1fr; } }
@@ -139,7 +147,7 @@ h2 { font: 600 15px/1.4 var(--body); margin: 20px 0 8px; }
 <div class="app" id="app" lang="ar" dir="rtl">
   <header class="top">
     <h1>كاشف المقام</h1>
-    <p>سجّل صوتك أو ارفع مقطعًا صوتيًا أو فيديو، ويعرض لك المقام وكل نقلة بتوقيتها.</p>
+    <p>سجّل صوتك أو ارفع مقطعًا صوتيًا أو فيديو، ويقسّم المقطع إلى أقسام بتوقيتها: عزف، غناء، ولحن جديد.</p>
   </header>
 
   <section class="inputs" aria-label="مصدر الصوت">
@@ -328,7 +336,7 @@ async function analyze(x, sr, onProgress) {
     total += 1;
     stableIdx.push(i);
   }
-  if (total < 40) throw new Error('no_pitch');
+  if (total < 40) { const er = new Error('no_pitch'); er.track = { cents, nFrames, hopSec: hop / fs, t0: (W / 2) / fs }; throw er; }
   for (let i = 0; i < BINS; i++) H[i] /= total;
 
   const Hfinal = new Float64Array(BINS);
@@ -338,7 +346,7 @@ async function analyze(x, sr, onProgress) {
     Hfinal[Math.floor(m / 10) % BINS] += 1 / tail.length;
   }
   return {
-    H, Hfinal,
+    H, Hfinal, monoTrack: { cents, nFrames, hopSec: hop / fs, t0: (W / 2) / fs },
     track: { cents, stableIdx: Int32Array.from(stableIdx), nFrames, hopSec: hop / fs, t0: (W / 2) / fs },
     stats: { frames: nFrames, stable: total, seconds: (n / fs) },
   };
@@ -601,12 +609,269 @@ async function analyzePoly(x, sr, onProgress) {
 
 /* mono tracker first; when the clip is a dense mix and few steady pitches exist, fall back to spectral peaks */
 async function analyzeAuto(x, sr, onProgress) {
-  let res = null;
-  try { res = await analyze(x, sr, (p) => onProgress && onProgress(p * 0.5)); } catch (e) { if (e.message !== 'no_pitch') throw e; }
+  let res = null, monoTrack = null;
+  try { res = await analyze(x, sr, (p) => onProgress && onProgress(p * 0.5)); monoTrack = res.monoTrack; }
+  catch (e) { if (e.message !== 'no_pitch') throw e; monoTrack = e.track || null; }
   const dur = x.length / sr;
   if (res && res.stats.stable / dur >= 6) return res;
   const poly = await analyzePoly(x, sr, (p) => onProgress && onProgress(0.5 + p * 0.5));
+  poly.monoTrack = monoTrack;
   return poly;
+}
+
+
+/* ---------- sections: where the sound changes (music / singing) and the melody changes ---------- */
+const BAND_HZ = [60, 200, 400, 800, 1600, 3200, 7000];
+
+async function timbreFeatures(x, sr) {
+  const f = Math.max(1, Math.round(sr / 16000));
+  const fs = sr / f, n = Math.floor(x.length / f);
+  const y = new Float32Array(n);
+  for (let i = 0; i < n; i++) { let s = 0; for (let j = 0; j < f; j++) s += x[i * f + j]; y[i] = s / f; }
+  const N = 1024, hop = 512, nF = Math.floor((n - N) / hop);
+  const per = Math.round((0.5 * fs) / hop), nOut = Math.floor(nF / per);
+  if (nOut < 20) return null;
+  const win = new Float64Array(N);
+  for (let i = 0; i < N; i++) win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (N - 1));
+  const binHz = fs / N, edges = BAND_HZ.map((h) => Math.round(h / binHz));
+  const fluxLo = edges[0], fluxHi = Math.round(4000 / binHz);
+  const re = new Float64Array(N), im = new Float64Array(N);
+  let prev = new Float64Array(N / 2);
+  const F = new Float32Array(nOut * 8), rms = new Float32Array(nOut), times = new Float64Array(nOut);
+  const acc = new Float64Array(8);
+  for (let o = 0; o < nOut; o++) {
+    acc.fill(0);
+    for (let k = 0; k < per; k++) {
+      const fr = o * per + k, st = fr * hop;
+      let e = 0;
+      for (let i = 0; i < N; i++) { re[i] = y[st + i] * win[i]; im[i] = 0; e += y[st + i] * y[st + i]; }
+      fftInPlace(re, im);
+      const mag = new Float64Array(N / 2);
+      for (let b = 0; b < N / 2; b++) mag[b] = Math.sqrt(re[b] * re[b] + im[b] * im[b]);
+      for (let bd = 0; bd < 6; bd++) { let t = 0; for (let b = edges[bd]; b < edges[bd + 1]; b++) t += mag[b] * mag[b]; acc[bd] += t; }
+      let fx = 0; for (let b = fluxLo; b < fluxHi; b++) { const d = mag[b] - prev[b]; if (d > 0) fx += d; }
+      acc[6] += fx; acc[7] += e / N; prev = mag;
+    }
+    for (let bd = 0; bd < 6; bd++) F[o * 8 + bd] = Math.log(acc[bd] / per + 1e-9);
+    F[o * 8 + 6] = Math.log(acc[6] / per + 1e-6);
+    F[o * 8 + 7] = Math.log(acc[7] / per + 1e-9);
+    rms[o] = Math.sqrt(acc[7] / per);
+    times[o] = (o + 0.5) * 0.5;
+    if (o % 40 === 0) await tick();
+  }
+  return { F, rms, times, nOut };
+}
+
+/* boundaries where the overall sound changes (Foote novelty on a self-similarity matrix); returns [{t, s}] */
+function noveltyBoundaries(feat) {
+  const { F, nOut } = feat, D = 8;
+  const mu = new Float64Array(D), sd = new Float64Array(D);
+  for (let d = 0; d < D; d++) {
+    for (let i = 0; i < nOut; i++) mu[d] += F[i * 8 + d] / nOut;
+    for (let i = 0; i < nOut; i++) sd[d] += Math.pow(F[i * 8 + d] - mu[d], 2) / nOut;
+    sd[d] = Math.sqrt(sd[d]) || 1;
+  }
+  const Z = new Float32Array(nOut * D);
+  for (let i = 0; i < nOut; i++) for (let d = 0; d < D; d++) Z[i * D + d] = (F[i * 8 + d] - mu[d]) / sd[d];
+  const sim = (i, j) => {
+    let q = 0;
+    for (let d = 0; d < D; d++) { const v = Z[i * D + d] - Z[j * D + d]; q += v * v; }
+    return Math.exp(-q / (2 * D * 0.5));
+  };
+  const L = 8, nov = new Float64Array(nOut);
+  for (let i = L; i < nOut - L; i++) {
+    let v = 0;
+    for (let a = 1; a <= L; a++) for (let b = 1; b <= L; b++) {
+      const w = Math.exp(-(a * a + b * b) / (2 * (L / 2) * (L / 2)));
+      v += w * (sim(i - a, i - b) + sim(i + a - 1, i + b - 1) - sim(i - a, i + b - 1) - sim(i + a - 1, i - b));
+    }
+    nov[i] = v;
+  }
+  let m = 0, s2 = 0, c = 0;
+  for (let i = L; i < nOut - L; i++) { m += nov[i]; c++; }
+  m /= c;
+  for (let i = L; i < nOut - L; i++) s2 += Math.pow(nov[i] - m, 2) / c;
+  const sdv = Math.sqrt(s2) || 1;
+  const out = [];
+  for (let i = L; i < nOut - L; i++) {
+    const z = (nov[i] - m) / sdv;
+    if (z < 1.0) continue;
+    let isPeak = true;
+    for (let k = -4; k <= 4; k++) if (nov[i + k] > nov[i]) isPeak = false;
+    if (isPeak) out.push({ t: feat.times[i], s: z });
+  }
+  return out;
+}
+
+/* per 0.5 s block: how much of the pitch track is voiced, and how much shows singing-like vibrato (4-8 Hz wobble) */
+function vibratoBlocks(mono, nOut) {
+  if (!mono) return null;
+  const { cents, nFrames, hopSec, t0 } = mono;
+  const vib = new Uint8Array(nFrames), longRun = new Uint8Array(nFrames), voiced = new Uint8Array(nFrames);
+  for (let i = 0; i < nFrames; i++) voiced[i] = Number.isNaN(cents[i]) ? 0 : 1;
+  let i = 0;
+  while (i < nFrames) {
+    if (!voiced[i]) { i++; continue; }
+    let j = i + 1;
+    while (j < nFrames && voiced[j] && Math.abs(cents[j] - cents[j - 1]) < 100) j++;
+    const len = j - i;
+    if (len >= 12) {
+      const dev = new Float64Array(len);
+      for (let k = 0; k < len; k++) {
+        let s = 0, c = 0;
+        for (let q = Math.max(0, k - 7); q <= Math.min(len - 1, k + 7); q++) { s += cents[i + q]; c++; }
+        dev[k] = cents[i + k] - s / c;
+      }
+      let sd = 0; for (let k = 0; k < len; k++) sd += dev[k] * dev[k];
+      sd = Math.sqrt(sd / len);
+      let zc = 0; for (let k = 1; k < len; k++) if ((dev[k - 1] < 0) !== (dev[k] < 0)) zc++;
+      const hz = zc / (2 * len * hopSec);
+      for (let k = i; k < j; k++) longRun[k] = 1;
+      if (sd >= 5 && sd <= 150 && hz >= 3.5 && hz <= 8.5) for (let k = i; k < j; k++) vib[k] = 1;
+    }
+    i = j;
+  }
+  const blocks = [];
+  for (let o = 0; o < nOut; o++) {
+    const a = Math.max(0, Math.round(((o * 0.5) - t0) / hopSec)), b = Math.min(nFrames, Math.round((((o + 1) * 0.5) - t0) / hopSec));
+    let v = 0, lr = 0, vb = 0;
+    for (let k = a; k < b; k++) { v += voiced[k]; lr += longRun[k]; vb += vib[k]; }
+    blocks.push({ n: Math.max(1, b - a), voiced: v, longRun: lr, vib: vb });
+  }
+  return blocks;
+}
+
+function tagOf(blocks, a, b) {
+  if (!blocks) return 'unknown';
+  let n = 0, v = 0, lr = 0, vb = 0;
+  for (let o = a; o < b; o++) { n += blocks[o].n; v += blocks[o].voiced; lr += blocks[o].longRun; vb += blocks[o].vib; }
+  if (n === 0) return 'unknown';
+  const voicedFrac = v / n, vibFrac = lr > 0 ? vb / lr : 0;
+  if (voicedFrac < 0.12) return 'music';
+  if (vibFrac >= 0.4) return 'voice';
+  if (voicedFrac >= 0.3 && vibFrac < 0.15) return 'music';
+  return 'unknown';
+}
+
+/* where singing-like vibrato switches on or off (smoothed over ~6 s, with hysteresis) */
+function voiceIntervals(blocks) {
+  if (!blocks) return [];
+  const n = blocks.length, sc = new Float64Array(n);
+  for (let o = 0; o < n; o++) {
+    let lr = 0, vb = 0, vd = 0, nn = 0;
+    for (let k = Math.max(0, o - 4); k <= Math.min(n - 1, o + 4); k++) { lr += blocks[k].longRun; vb += blocks[k].vib; vd += blocks[k].voiced; nn += blocks[k].n; }
+    sc[o] = nn && vd / nn >= 0.12 ? (lr > 0 ? vb / lr : 0) : 0;
+  }
+  // on/off with hysteresis, then bridge short gaps and drop short bursts so brief flickers are not boundaries
+  let on = sc[0] >= 0.4, startT = on ? 0 : -1;
+  const iv = [];
+  for (let o = 1; o < n; o++) {
+    if (!on && sc[o] >= 0.45) { on = true; startT = o * 0.5; }
+    else if (on && sc[o] <= 0.3) { on = false; iv.push([startT, o * 0.5]); }
+  }
+  if (on) iv.push([startT, n * 0.5]);
+  const joined = [];
+  for (const v of iv) {
+    const p = joined[joined.length - 1];
+    if (p && v[0] - p[1] < 8) p[1] = v[1]; else joined.push(v.slice());
+  }
+  return joined.filter((v) => v[1] - v[0] >= 6);
+}
+
+function voiceBoundaries(blocks) {
+  const out = [], n = blocks ? blocks.length : 0;
+  voiceIntervals(blocks).forEach((v) => {
+    if (v[0] > 0) out.push({ t: v[0], s: 1.6 });
+    if (v[1] < n * 0.5) out.push({ t: v[1], s: 1.6 });
+  });
+  return out;
+}
+
+/* Joins every kind of change into one list of phrases. Each: {start, end, type, maqam, tonicCents, score}.
+   type is 'voice' | 'music' | 'unknown'. */
+async function buildSections(x, sr, res, top) {
+  const seconds = res.stats.seconds;
+  const cands = [];
+  let feat = null;
+  try { feat = await timbreFeatures(x, sr); } catch (e) { feat = null; }
+  if (feat) noveltyBoundaries(feat).forEach((b) => cands.push(b));
+  const blocks = feat && res.mode !== 'poly' ? vibratoBlocks(res.monoTrack, feat.nOut) : null;
+  const vints = voiceIntervals(blocks);
+  voiceBoundaries(blocks).forEach((b) => cands.push(b));
+  try { segmentTimeline(res, top).slice(1).forEach((sg) => cands.push({ t: sg.start, s: 1.2 })); } catch (e) { /* no melodic boundaries */ }
+
+  if (typeof process !== 'undefined' && process.env.DEBUG_SECTIONS) console.log('candidates', cands.map((c) => c.t.toFixed(1) + ':' + c.s.toFixed(2)).join(' '));
+  // keep the strongest boundary inside every 6 s neighbourhood
+  cands.sort((a, b) => a.t - b.t);
+  let kept = [];
+  for (const c of cands) {
+    const p = kept[kept.length - 1];
+    if (p && c.t - p.t < 6) { if (c.s > p.s) kept[kept.length - 1] = c; } else kept.push(c);
+  }
+  const first = res.mode === 'poly' ? res.track.times[0] : res.track.t0 + res.track.stableIdx[0] * res.track.hopSec;
+  const lastT = Math.min(seconds, res.mode === 'poly' ? res.track.times[res.track.times.length - 1] : res.track.t0 + res.track.stableIdx[res.track.stableIdx.length - 1] * res.track.hopSec);
+  kept = kept.filter((c) => c.t > first + 8 && c.t < lastT - 8);
+  // no phrase shorter than 8 s: drop the weaker neighbouring boundary until none is
+  for (let guard = 0; guard < 100; guard++) {
+    const e = [first].concat(kept.map((c) => c.t), [lastT]);
+    let bad = -1;
+    for (let i = 0; i + 1 < e.length; i++) if (e[i + 1] - e[i] < 8) { bad = i; break; }
+    if (bad < 0 || !kept.length) break;
+    const left = bad - 1, right = bad; // boundary indexes in `kept`
+    let drop;
+    if (left < 0) drop = right; else if (right >= kept.length) drop = left; else drop = kept[left].s <= kept[right].s ? left : right;
+    kept.splice(drop, 1);
+  }
+
+  const tr = res.track, S = tr.stableIdx, cents = tr.cents;
+  const tOf = (k) => (tr.times ? tr.times[S[k]] : tr.t0 + S[k] * tr.hopSec);
+  const lb = (t) => { let lo = 0, hi = S.length; while (lo < hi) { const m = (lo + hi) >> 1; if (tOf(m) < t) lo = m + 1; else hi = m; } return lo; };
+  const finalN = tr.finalN || 40;
+  const anchor = top.tonicCents;
+  const unitRel = (c) => Math.round(((((c - anchor) % 1200) + 1200) % 1200) / 50) % 24;
+  const describe = (start, end) => {
+    const a = lb(start), b = lb(end);
+    let maqam = null, tonicCents = null, score = null, key = '';
+    if (b - a >= 30) {
+      const t0 = rank(histOf(cents, S, a, b, finalN))[0];
+      maqam = t0.maqam; tonicCents = t0.tonicCents; score = t0.score;
+      const tu = unitRel(tonicCents);
+      key = Array.from(new Set(maqam.deg.map((d) => (tu + d) % 24))).sort((p, q) => p - q).join(',');
+    }
+    const oa = feat ? Math.floor(start / 0.5) : 0, ob = feat ? Math.max(oa + 1, Math.floor(end / 0.5)) : 0;
+    let type = tagOf(blocks, oa, Math.min(ob, blocks ? blocks.length : 0));
+    if (blocks) {
+      let ov = 0;
+      vints.forEach((v) => { ov += Math.max(0, Math.min(end, v[1]) - Math.max(start, v[0])); });
+      if (ov / Math.max(1, end - start) >= 0.5) type = 'voice';
+      else if (type === 'voice' || (type === 'unknown' && vints.length)) type = 'music';
+    }
+    return { start, end, type, maqam, tonicCents, score, key };
+  };
+
+  let edges = [first].concat(kept.map((c) => c.t), [lastT]);
+  let segs = [];
+  for (let i = 0; i + 1 < edges.length; i++) segs.push(describe(edges[i], edges[i + 1]));
+  // an undecided type next to a decided one takes the neighbour's type when it is short
+  for (let i = 0; i < segs.length; i++) {
+    if (segs[i].type !== 'unknown' || segs[i].end - segs[i].start >= 14) continue;
+    const nb = (i > 0 && segs[i - 1].type !== 'unknown') ? segs[i - 1] : (i + 1 < segs.length && segs[i + 1].type !== 'unknown' ? segs[i + 1] : null);
+    if (nb) segs[i].type = nb.type;
+  }
+  // neighbours with the same kind of sound and the same notes are one phrase
+  for (let guard = 0; guard < 100; guard++) {
+    let did = false;
+    for (let i = 0; i + 1 < segs.length; i++) {
+      const shortOne = Math.min(segs[i].end - segs[i].start, segs[i + 1].end - segs[i + 1].start) < 15;
+      if (segs[i].type === segs[i + 1].type && (segs[i].key === segs[i + 1].key || (res.mode !== 'poly' && shortOne))) {
+        const m = describe(segs[i].start, segs[i + 1].end);
+        m.type = segs[i].type;
+        segs.splice(i, 2, m); did = true; break;
+      }
+    }
+    if (!did) break;
+  }
+  return segs.map((sg) => ({ start: sg.start, end: sg.end, type: sg.type, maqam: sg.maqam, tonicCents: sg.tonicCents, score: sg.score }));
 }
 
 /* ---------- synthetic singer, used for demos and for testing ---------- */
@@ -615,7 +880,9 @@ function rng(seed) {
   return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
 }
 
-function synthMelody(deg, f0, sr, seed) {
+function synthMelody(deg, f0, sr, seed, opts) {
+  opts = opts || {};
+  const VIB = opts.vib == null ? 12 : opts.vib, GLIDE = opts.glide || 0.03, NOISE = opts.noise == null ? 0.004 : opts.noise, VRATE = opts.vrate || 5.5;
   const r = rng(seed);
   const n = deg.length;
   const unit = (k) => { const o = Math.floor(k / n); const m = ((k % n) + n) % n; return deg[m] + 24 * o; };
@@ -640,14 +907,14 @@ function synthMelody(deg, f0, sr, seed) {
   const out = new Float32Array(Math.ceil(totalDur * sr) + 16);
   const H = [1, 0.5, 0.33, 0.22, 0.15];
   let pos = 0, ph = 0, lf = Math.log2(f0), vph = 0;
-  const a = 1 - Math.exp(-1 / (0.03 * sr));
+  const a = 1 - Math.exp(-1 / (GLIDE * sr));
   for (const [u, dur] of seq) {
     const target = Math.log2(f0) + (u * 50 + (r() - 0.5) * 24) / 1200;
     const ns = Math.floor(dur * sr);
     for (let i = 0; i < ns; i++) {
       lf += (target - lf) * a;
-      vph += (2 * Math.PI * 5.5) / sr;
-      const vib = ((dur > 0.6 ? 12 : 5) / 1200) * Math.sin(vph);
+      vph += (2 * Math.PI * VRATE) / sr;
+      const vib = ((dur > 0.6 ? VIB : VIB * 0.4) / 1200) * Math.sin(vph);
       ph += (2 * Math.PI * Math.pow(2, lf + vib)) / sr;
       let amp = 1;
       const t = i / sr;
@@ -656,7 +923,7 @@ function synthMelody(deg, f0, sr, seed) {
       if (rem < 0.04) amp = Math.min(amp, rem / 0.04);
       let s = 0;
       for (let h = 0; h < H.length; h++) s += H[h] * Math.sin((h + 1) * ph);
-      out[pos + i] = 0.25 * amp * s + (r() - 0.5) * 0.004;
+      out[pos + i] = 0.25 * amp * s + (r() - 0.5) * NOISE;
     }
     pos += ns + Math.floor(0.03 * sr);
   }
@@ -664,7 +931,7 @@ function synthMelody(deg, f0, sr, seed) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { MAQAMAT, BINS, analyze, analyzePoly, analyzeAuto, rank, segmentTimeline, synthMelody, noteFromCents, stepsOf, fracTone, unitName };
+  module.exports = { MAQAMAT, BINS, analyze, analyzePoly, analyzeAuto, rank, segmentTimeline, buildSections, vibratoBlocks, voiceBoundaries, synthMelody, noteFromCents, stepsOf, fracTone, unitName };
 }
 
 </script>
@@ -684,11 +951,14 @@ if (typeof module !== 'undefined') {
     sel.appendChild(o);
   });
   var mixOpt = document.createElement('option');
-  mixOpt.value = 'mix'; mixOpt.textContent = 'ثلاث نقلات (بياتي ← حجاز ← راست)';
+  mixOpt.value = 'mix'; mixOpt.textContent = 'عزف ثم غناء ثم عزف (بياتي ← حجاز ← راست)';
   sel.insertBefore(mixOpt, sel.firstChild);
   sel.value = 'mix';
 
   var job = 0;
+  function withSections(res, data, sr) {
+    return buildSections(data, sr, res, rank(res)[0]).then(function (secs) { res.sections = secs; return res; }, function () { res.sections = []; return res; });
+  }
   function setBusy(b) { busy = b; }
 
   function showProgress(label) {
@@ -746,25 +1016,29 @@ if (typeof module !== 'undefined') {
   var lastTop = null;
   function fmt(s) { var m = Math.floor(s / 60), x = Math.floor(s % 60); return (m < 10 ? '0' : '') + m + ':' + (x < 10 ? '0' : '') + x; }
   function hueOf(m) { return (MAQAMAT.indexOf(m) * 29 + 215) % 360; }
-  function timelineHTML(segs) {
+  var TYPE_AR = { music: 'موسيقى', voice: 'غناء', unknown: '' };
+  function timelineHTML(segs, mode) {
     if (!segs.length) return '';
     var total = segs[segs.length - 1].end - segs[0].start || 1;
     var strip = segs.map(function (g) {
-      return '<i style="flex:' + ((g.end - g.start) / total).toFixed(4) + ';background:hsl(' + hueOf(g.maqam) + ' 52% 46%)"></i>';
+      return '<i class="t-' + g.type + '" style="flex:' + ((g.end - g.start) / total).toFixed(4) + '"></i>';
     }).join('');
-    var rows = segs.map(function (g, i) {
-      var nn = noteFromCents(g.tonicCents);
-      return '<li class="ph"><time>' + fmt(g.start) + ' ← ' + fmt(g.end) + '</time><div><span class="n"><span class="dot" style="background:hsl(' + hueOf(g.maqam) + ' 52% 46%)"></span>' + esc(g.maqam.ar) + '</span> <span class="on">على ' + esc(nn.name) + '</span>' +
-        (i > 0 ? '<span class="sh">نقلة عند ' + fmt(g.start) + ' من ' + esc(segs[i - 1].maqam.ar) + '</span>' : '') + '</div></li>';
+    var rows = segs.map(function (g) {
+      var nn = g.maqam ? noteFromCents(g.tonicCents).name : '';
+      var name = g.maqam ? esc(g.maqam.ar) : 'غير محدد';
+      var chip = g.type === 'unknown' ? '' : '<span class="tg t-' + g.type + '">' + TYPE_AR[g.type] + '</span>';
+      return '<li class="ph"><time>' + fmt(g.start) + ' ← ' + fmt(g.end) + '<small>' + Math.round(g.end - g.start) + ' ثانية</small></time><div><span class="n">' + name + '</span>' +
+        (nn ? ' <span class="on">على ' + esc(nn) + '</span>' : '') + chip + '</div></li>';
     }).join('');
-    var cap = segs.length === 1 ? 'لم تُرصد نقلات، المقام ثابت طوال المقطع.' : 'عدد النقلات: ' + (segs.length - 1) + '. أقصر جملة يلتقطها التحليل نحو 8 ثوانٍ، والتوقيتات تقريبية بفارق بضع ثوانٍ.';
-    return '<h2>الجمل والنقلات</h2><div class="strip" role="img" aria-label="شريط زمني للمقامات">' + strip + '</div><ol class="phrases">' + rows + '</ol><p class="cap">' + cap + '</p>';
+    var anyType = segs.some(function (g) { return g.type !== 'unknown'; });
+    var cap = 'عدد الأقسام: ' + segs.length + '. أقصر قسم نحو 8 ثوانٍ، والتوقيتات تقريبية بفارق بضع ثوانٍ. ' +
+      (anyType ? 'تمييز الغناء من العزف تقدير مبني على اهتزاز الصوت، وهو أدق مع صوت أو آلة منفردة.' : 'في الأغاني بآلات كثيرة لا أستطيع التمييز بين الغناء والعزف، فالأقسام مبنية على تغيّر الصوت واللحن فقط.');
+    return '<h2>الأقسام بالتوقيت</h2><div class="strip" role="img" aria-label="شريط زمني للأقسام">' + strip + '</div><ol class="phrases">' + rows + '</ol><p class="cap">' + cap + '</p>';
   }
 
   function render(res, label, isDemo) {
     var r = rank(res), top = r[0], lv = levelOf(r);
-    var segs = [];
-    try { segs = segmentTimeline(res, top); } catch (e) { segs = []; }
+    var segs = res.sections || [];
     lastTop = top;
     var nn = noteFromCents(top.tonicCents);
     var dev = Math.round(nn.dev);
@@ -775,9 +1049,9 @@ if (typeof module !== 'undefined') {
       '<div class="name" id="maqamName"></div>' +
       '<p class="tonic">القرار: ' + esc(nn.name) + ' <small>(الضبط ' + (dev >= 0 ? '+' : '−') + Math.abs(dev) + ' سنت عن 440)</small></p>' +
       '<p class="steps">' + steps + '</p>' +
-      '<div class="verdict"><span class="badge ' + lv.k + '">' + lv.t + '</span><span class="note">' + esc((res.mode === 'poly' ? 'مقطع بآلات متعددة، فالتحليل أقل دقة. ' : '') + (segs.length > 1 ? 'المقطع ينتقل بين ' + segs.length + ' جمل بمقامات مختلفة، وهذا الأقرب للمجموع. ' : '') + lv.note) + '</span></div>' +
+      '<div class="verdict"><span class="badge ' + lv.k + '">' + lv.t + '</span><span class="note">' + esc((res.mode === 'poly' ? 'مقطع بآلات متعددة، فالتحليل أقل دقة. ' : '') + (segs.length > 1 ? 'المقطع مقسّم إلى ' + segs.length + ' أقسام، وهذا الأقرب للمجموع. ' : '') + lv.note) + '</span></div>' +
       '<div class="row-actions"><button class="small" id="playBtn" type="button">▶ اسمع سلّم المقام</button></div>' +
-      timelineHTML(segs) +
+      timelineHTML(segs, res.mode) +
       '<h2>أقرب المقامات</h2><ul class="alts">' +
       r.slice(0, 3).map(function (x, i) {
         return '<li class="alt' + (i === 0 ? ' first' : '') + '"><span class="n">' + esc(x.maqam.ar) + '</span><div class="bar"><i style="width:' + pct(x) + '%"></i></div><span class="p">' + pct(x) + '%</span></li>';
@@ -822,8 +1096,8 @@ if (typeof module !== 'undefined') {
 
   // ---- demo ----
   function mixSignal() {
-    var parts = [[1, 146.83], [2, 146.83], [0, 130.81]];
-    var chunks = parts.map(function (q, i) { return synthMelody(MAQAMAT[q[0]].deg, q[1], 16000, 900 + i * 7); });
+    var parts = [[1, 146.83, { vib: 0, glide: 0.03 }], [2, 146.83, { vib: 38, glide: 0.07, vrate: 6, noise: 0.01 }], [0, 130.81, { vib: 0, glide: 0.03 }]];
+    var chunks = parts.map(function (q, i) { return synthMelody(MAQAMAT[q[0]].deg, q[1], 16000, 600 + i, q[2]); });
     var n = 0; chunks.forEach(function (c) { n += c.length; });
     var x = new Float32Array(n), pos = 0;
     chunks.forEach(function (c) { x.set(c, pos); pos += c.length; });
@@ -834,12 +1108,12 @@ if (typeof module !== 'undefined') {
     var isMix = which === 'mix', idx = isMix ? 0 : parseInt(which, 10);
     var m = MAQAMAT[idx], f0 = DEMO_TONICS[idx % DEMO_TONICS.length];
     setBusy(true);
-    showProgress(isMix ? 'نولّد مقطعًا بثلاث نقلات ونحلّله…' : 'نولّد نموذجًا بمقام ' + m.ar + ' ونحلّله…');
+    showProgress(isMix ? 'نولّد مقطعًا بثلاثة أقسام ونحلّله…' : 'نولّد نموذجًا بمقام ' + m.ar + ' ونحلّله…');
     setTimeout(function () {
       var x = isMix ? mixSignal() : synthMelody(m.deg, f0, 16000, 500 + idx);
-      analyze(x, 16000, function (p) { if (my === job) onProgress(p); }).then(function (res) {
+      analyze(x, 16000, function (p) { if (my === job) onProgress(p * 0.8); }).then(function (res) { return withSections(res, x, 16000); }).then(function (res) {
         if (my !== job) return;
-        render(res, isMix ? 'بياتي ← حجاز ← راست (مولَّد)' : 'مقام ' + m.ar + ' (مولَّد)', true);
+        render(res, isMix ? 'عزف ← غناء ← عزف (مولَّد)' : 'مقام ' + m.ar + ' (مولَّد)', true);
       }).catch(function () { if (my === job) showError('تعذّر تحليل النموذج.'); }).then(function () { if (my === job) setBusy(false); });
     }, 30);
   }
@@ -867,6 +1141,25 @@ if (typeof module !== 'undefined') {
     });
   }
 
+  function explain(e) {
+    var msg = e && e.message;
+    if (msg === 'no_pitch') return 'لم أجد نغمات واضحة. اقترب من المايك، وقلّل الضجيج، وغنِّ أو اعزف 20 ثانية على الأقل.';
+    if (msg === 'too_short') return 'المقطع قصير جدًا. سجّل 10 ثوانٍ على الأقل.';
+    return 'تعذّر قراءة هذا الملف. جرّب صيغة أخرى مثل m4a أو mp3 أو wav.' + (msg ? ' [' + msg + ']' : '');
+  }
+
+  function handleSamples(data, sr, label) {
+    var my = ++job;
+    setBusy(true);
+    showProgress('نحلّل التسجيل…');
+    analyzeAuto(data, sr, function (p) { if (my === job) onProgress(p * 0.8); }).then(function (res) { return withSections(res, data, sr); }).then(function (res) {
+      if (my !== job) return;
+      render(res, label, false);
+    }).catch(function (e) {
+      if (my === job) showError(explain(e));
+    }).then(function () { if (my === job) setBusy(false); });
+  }
+
   function handleFile(file) {
     if (!file) return;
     var my = ++job;
@@ -883,16 +1176,13 @@ if (typeof module !== 'undefined') {
       var mono = toMono(audio);
       if (my !== job) throw new Error('stale');
       showProgress(mono.capped ? 'نحلّل أول 6 دقائق من المقطع…' : 'نحلّل النغمات…');
-      return analyzeAuto(mono.data, mono.sr, function (p) { if (my === job) onProgress(p); });
+      return analyzeAuto(mono.data, mono.sr, function (p) { if (my === job) onProgress(p * 0.8); }).then(function (res) { return withSections(res, mono.data, mono.sr); });
     }).then(function (res) {
       if (my !== job) return;
       render(res, file.name || 'تسجيل', false);
     }).catch(function (e) {
       if (my !== job) return;
-      var msg = e && e.message;
-      if (msg === 'no_pitch') showError('لم أجد نغمات واضحة. تأكد أن الصوت قريب وهادئ الخلفية، وجرّب مقطعًا أطول.');
-      else if (msg === 'too_short') showError('المقطع قصير جدًا. سجّل 10 ثوانٍ على الأقل.');
-      else showError('تعذّر قراءة هذا الملف. جرّب صيغة أخرى مثل m4a أو mp3 أو wav.');
+      showError(explain(e));
     }).then(function () { if (my === job) setBusy(false); });
   }
   ['rec', 'up', 'plain'].forEach(function (id) {
@@ -913,30 +1203,50 @@ if (typeof module !== 'undefined') {
   // ---- live microphone (only in the installable build; the embedded artifact cannot open the mic) ----
   var STANDALONE = true;
   function setupRecorder() {
-    if (typeof navigator === 'undefined' || !window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) return;
+    if (typeof navigator === 'undefined' || !window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
     var btn = $('recBtn'), input = $('rec'), label = btn.querySelector('span');
     input.style.display = 'none';
-    var rec = null, chunks = [], timer = null, t0 = 0;
+    var cap = null;
+    function finish() {
+      var c = cap; cap = null;
+      clearInterval(c.timer);
+      try { c.proc.disconnect(); c.src.disconnect(); } catch (e) {}
+      c.stream.getTracks().forEach(function (t) { t.stop(); });
+      var sr = c.ctx.sampleRate;
+      try { c.ctx.close(); } catch (e) {}
+      label.textContent = 'سجّل الآن'; btn.classList.remove('recording'); btn.classList.add('primary');
+      var n = 0; c.bufs.forEach(function (b) { n += b.length; });
+      if (n < sr * 6) { showError('التسجيل قصير جدًا. سجّل 10 ثوانٍ على الأقل.'); return; }
+      if (c.peak < 0.01) { showError('التسجيل صامت تقريبًا. تأكد أن المايك يعمل وأن الصوت قريب منه، ثم أعد المحاولة.'); return; }
+      var out = new Float32Array(n), pos = 0;
+      c.bufs.forEach(function (b) { out.set(b, pos); pos += b.length; });
+      handleSamples(out, sr, 'تسجيل المايك');
+    }
     btn.addEventListener('click', function () {
-      if (rec && rec.state === 'recording') { rec.stop(); return; }
-      navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }).then(function (st) {
-        chunks = [];
-        rec = new MediaRecorder(st);
-        rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
-        rec.onstop = function () {
-          clearInterval(timer);
-          st.getTracks().forEach(function (t) { t.stop(); });
-          label.textContent = 'سجّل الآن'; btn.classList.remove('recording'); btn.classList.add('primary');
-          var blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
-          var name = 'تسجيل المايك';
-          var f; try { f = new File([blob], name, { type: blob.type }); } catch (e) { f = blob; f.name = name; }
-          handleFile(f);
+      if (cap) { finish(); return; }
+      navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }).then(function (stream) {
+        var ctx = new AC();
+        if (ctx.resume) ctx.resume();
+        var src = ctx.createMediaStreamSource(stream);
+        var proc = ctx.createScriptProcessor(4096, 1, 1);
+        var mute = ctx.createGain(); mute.gain.value = 0;
+        var st = { ctx: ctx, src: src, proc: proc, stream: stream, bufs: [], peak: 0, level: 0, timer: null };
+        proc.onaudioprocess = function (e) {
+          var d = e.inputBuffer.getChannelData(0), m = 0;
+          for (var i = 0; i < d.length; i++) { var v = d[i] < 0 ? -d[i] : d[i]; if (v > m) m = v; }
+          st.bufs.push(new Float32Array(d));
+          st.level = m; if (m > st.peak) st.peak = m;
         };
-        rec.start();
-        t0 = Date.now();
+        src.connect(proc); proc.connect(mute); mute.connect(ctx.destination);
+        cap = st;
+        var t0 = Date.now();
         btn.classList.remove('primary'); btn.classList.add('recording');
+        st.timer = setInterval(function () {
+          label.textContent = 'إيقاف التسجيل ' + fmt((Date.now() - t0) / 1000) + (st.level < 0.01 ? ' · الصوت ضعيف' : ' · الصوت جيد');
+        }, 400);
         label.textContent = 'إيقاف التسجيل 00:00';
-        timer = setInterval(function () { label.textContent = 'إيقاف التسجيل ' + fmt((Date.now() - t0) / 1000); }, 500);
       }).catch(function () {
         showError('لم يُسمح بالوصول إلى المايك. اسمح به من إعدادات الموقع في المتصفح ثم أعد المحاولة.');
       });
