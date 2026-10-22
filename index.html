@@ -1,0 +1,958 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2a4fa8">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}:root{color-scheme:light dark}</style>
+<title>كاشف المقام</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@400;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap">
+<style>
+:root {
+  /* Layout: one phone-width column. Two big input buttons on top, then a result card led by the maqam name in calligraphic type, then the pitch fingerprint chart. */
+  --bg: #eceff4;
+  --surface: #f8f9fc;
+  --fg: #14213a;
+  --muted: #56627a;
+  --line: #d3d9e6;
+  --accent: #2a4fa8;
+  --accent-fg: #ffffff;
+  --gold: #9a6200;
+  --gold-soft: #efe1bd;
+  --display: 'Aref Ruqaa', 'Noto Naskh Arabic', 'Amiri', serif;
+  --body: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1322; --surface: #151d31; --fg: #e7ecf7; --muted: #93a0bb; --line: #26314a;
+    --accent: #86a8ff; --accent-fg: #0d1322; --gold: #e3b45a; --gold-soft: #3a3020;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1322; --surface: #151d31; --fg: #e7ecf7; --muted: #93a0bb; --line: #26314a;
+  --accent: #86a8ff; --accent-fg: #0d1322; --gold: #e3b45a; --gold-soft: #3a3020;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 15px/1.65 var(--body);
+  direction: rtl;
+  padding-block: 20px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.app { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.top h1 { font: 700 34px/1.2 var(--display); margin: 0 0 4px; color: var(--accent); text-wrap: balance; }
+.top p { margin: 0; color: var(--muted); max-width: 40ch; }
+
+.inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 58px; padding: 10px 14px; border-radius: 14px; border: 1.5px solid var(--accent);
+  font: 600 16px/1.2 var(--body); cursor: pointer; user-select: none; text-align: center;
+  background: transparent; color: var(--accent);
+}
+.btn { position: relative; overflow: hidden; }
+.cover { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 0; }
+.alt-pick { font-size: 13px; color: var(--muted); }
+.alt-pick summary { cursor: pointer; padding: 4px 0; }
+.alt-pick input { display: block; margin-top: 8px; max-width: 100%; color: var(--fg); font: 14px var(--body); }
+.btn svg { width: 22px; height: 22px; flex: none; }
+.btn.primary { background: var(--accent); color: var(--accent-fg); }
+.btn.recording { background: var(--gold); border-color: var(--gold); color: var(--accent-fg); }
+.btn.drag { outline: 3px dashed var(--gold); outline-offset: 2px; }
+.btn:focus-within, .btn:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.hint { margin: 0; font-size: 13px; color: var(--muted); }
+
+.demo { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.demo label { font-size: 13px; color: var(--muted); }
+select, .small {
+  font: 500 14px/1.2 var(--body); color: var(--fg); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; min-height: 40px;
+}
+.small { cursor: pointer; }
+.small:focus-visible, select:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.small[disabled] { opacity: .5; cursor: default; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 18px 16px 16px; min-width: 0; }
+.meta { display: flex; justify-content: space-between; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); }
+.chip { background: var(--gold-soft); color: var(--gold); border-radius: 999px; padding: 2px 10px; font-weight: 600; font-size: 12.5px; max-width: 62%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.name { font: 700 clamp(56px, 19vw, 88px)/1.15 var(--display); color: var(--accent); margin: 6px 0 0; text-wrap: balance; }
+.tonic { font-size: 17px; font-weight: 600; margin: 0; }
+.tonic small { font-weight: 400; color: var(--muted); font-size: 13px; }
+.steps { direction: ltr; text-align: right; font-size: 13px; color: var(--muted); margin: 6px 0 0; font-variant-numeric: tabular-nums; letter-spacing: .03em; }
+.steps b { color: var(--fg); font-weight: 600; }
+.verdict { display: flex; align-items: center; gap: 10px; margin: 14px 0 4px; flex-wrap: wrap; }
+.badge { font-weight: 600; font-size: 13px; border-radius: 8px; padding: 3px 10px; border: 1px solid currentColor; }
+.badge.high { color: var(--accent); }
+.badge.mid, .badge.close { color: var(--gold); }
+.verdict span.note { font-size: 13.5px; color: var(--muted); }
+.row-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
+h2 { font: 600 15px/1.4 var(--body); margin: 20px 0 8px; }
+.alts { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.alt { display: grid; grid-template-columns: 5.5em 1fr 3em; gap: 10px; align-items: center; }
+.alt .n { font: 700 20px/1.2 var(--display); }
+.bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; direction: rtl; }
+.bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.alt.first .bar i { background: var(--accent); }
+.alt:not(.first) .bar i { background: var(--muted); opacity: .6; }
+.alt .p { font-size: 13px; color: var(--muted); text-align: left; font-variant-numeric: tabular-nums; direction: ltr; }
+
+.chart { direction: ltr; width: 100%; }
+.chart svg { display: block; width: 100%; height: auto; }
+.chart .area { fill: var(--accent); fill-opacity: .22; stroke: var(--accent); stroke-width: 1.4; }
+.chart .tick { stroke: var(--gold); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart .base { stroke: var(--line); stroke-width: 1; }
+.chart text { fill: var(--muted); font: 500 10px var(--body); text-anchor: middle; }
+.chart text.ton { fill: var(--gold); font-weight: 600; }
+.cap { font-size: 12.5px; color: var(--muted); margin: 6px 0 0; }
+
+.progress { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin: 14px 0 6px; }
+.progress i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.busy { color: var(--muted); font-size: 14px; margin: 0; }
+.err { color: var(--fg); background: var(--gold-soft); border-radius: 12px; padding: 12px 14px; margin: 0; }
+
+.strip { display: flex; gap: 2px; height: 22px; direction: ltr; border-radius: 6px; overflow: hidden; margin-top: 4px; }
+.strip i { display: block; min-width: 3px; }
+.phrases { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.ph { display: grid; grid-template-columns: 6.6em 1fr; gap: 10px; align-items: start; }
+.ph time { direction: ltr; text-align: right; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; line-height: 2; white-space: nowrap; }
+.ph .n { font: 700 24px/1.2 var(--display); display: inline-flex; align-items: center; gap: 8px; }
+.ph .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.ph .on { font: 500 14px var(--body); color: var(--muted); }
+.ph .sh { display: block; font-size: 12.5px; color: var(--gold); margin-top: 2px; }
+.foot { font-size: 12.5px; color: var(--muted); margin: 0; }
+@media (prefers-reduced-motion: reduce) { .progress i { transition: none; } }
+@media (max-width: 360px) { .inputs { grid-template-columns: 1fr; } }
+</style>
+
+<div class="app" id="app" lang="ar" dir="rtl">
+  <header class="top">
+    <h1>كاشف المقام</h1>
+    <p>سجّل صوتك أو ارفع مقطعًا صوتيًا أو فيديو، ويعرض لك المقام وكل نقلة بتوقيتها.</p>
+  </header>
+
+  <section class="inputs" aria-label="مصدر الصوت">
+    <div class="btn primary" id="recBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      <span>سجّل الآن</span>
+      <input class="cover" id="rec" type="file" accept="audio/*" capture aria-label="سجّل الآن">
+    </div>
+    <div class="btn" id="upBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>
+      <span>ارفع ملفًا</span>
+      <input class="cover" id="up" type="file" accept="audio/*,video/*,.m4a,.mp3,.wav,.ogg,.aac,.flac,.mp4,.mov,.webm" aria-label="ارفع ملفًا">
+    </div>
+  </section>
+  <details class="alt-pick">
+    <summary>الأزرار لا تعمل؟ اختر الملف من هنا</summary>
+    <input id="plain" type="file" accept="audio/*,video/*">
+  </details>
+  <p class="hint">«سجّل الآن» يسجّل من المايك مباشرة، واضغط مرة ثانية للإيقاف. الأدق: صوت أو آلة واحدة لمدة 20 ثانية أو أكثر.</p>
+
+  <div class="demo">
+    <label for="demoSel">جرّب نموذجًا صناعيًا:</label>
+    <select id="demoSel"></select>
+    <button class="small" id="demoBtn" type="button">حلّل</button>
+  </div>
+
+  <section id="result" aria-live="polite"></section>
+
+  <p class="foot">النتيجة تقدير مبني على تحليل الدرجات الصوتية وليست حكمًا نهائيًا. الأغاني ذات الآلات الكثيرة تقلّ دقتها عن الغناء أو العزف المنفرد.</p>
+</div>
+
+<script>
+'use strict';
+/* Maqam detection core: pitch tracking (YIN), pitch-class histogram, template matching. */
+
+const BINS = 120; // 10-cent bins over one octave
+
+// Scale degrees in quarter-tone units (1 unit = 50 cents) above the tonic.
+const MAQAMAT = [
+  { id: 'rast',      ar: 'راست',     deg: [0, 4, 7, 10, 14, 18, 21] },
+  { id: 'bayati',    ar: 'بياتي',    deg: [0, 3, 6, 10, 14, 16, 20] },
+  { id: 'hijaz',     ar: 'حجاز',     deg: [0, 2, 8, 10, 14, 16, 20] },
+  { id: 'saba',      ar: 'صبا',      deg: [0, 3, 6, 8, 14, 16, 20] },
+  { id: 'nahawand',  ar: 'نهاوند',   deg: [0, 4, 6, 10, 14, 16, 20, 22], w: [1, 1, 1, 1, 1, 1, 0.5, 0.7] },
+  { id: 'kurd',      ar: 'كرد',      deg: [0, 2, 6, 10, 14, 16, 20] },
+  { id: 'ajam',      ar: 'عجم',      deg: [0, 4, 8, 10, 14, 18, 22] },
+  { id: 'sika',      ar: 'سيكا',     deg: [0, 3, 7, 11, 14, 17, 21] },
+  { id: 'nikriz',    ar: 'نكريز',    deg: [0, 4, 6, 12, 14, 18, 20] },
+  { id: 'suznak',    ar: 'سوزناك',   deg: [0, 4, 7, 10, 14, 16, 22] },
+  { id: 'hijazkar',  ar: 'حجاز كار', deg: [0, 2, 8, 10, 14, 16, 22] },
+  { id: 'nawaathar', ar: 'نوا أثر',  deg: [0, 4, 6, 12, 14, 16, 22] },
+];
+
+const EVEN_NAMES = { 0: 'دو', 2: 'ري♭', 4: 'ري', 6: 'مي♭', 8: 'مي', 10: 'فا', 12: 'فا♯', 14: 'صول', 16: 'لا♭', 18: 'لا', 20: 'سي♭', 22: 'سي' };
+const UPPER_NATURAL = { 3: 1, 7: 1, 9: 1, 13: 1, 17: 1, 21: 1 };
+
+function unitName(u) {
+  u = ((u % 24) + 24) % 24;
+  if (u % 2 === 0) return EVEN_NAMES[u];
+  if (UPPER_NATURAL[u]) return EVEN_NAMES[u + 1] + ' نصف♭';
+  return EVEN_NAMES[u - 1] + ' نصف♯';
+}
+
+// cents measured from A440 -> { name, dev } nearest 24-EDO name from C
+function noteFromCents(c) {
+  const u = (c + 900) / 50;
+  const r = Math.round(u);
+  return { name: unitName(r), dev: (u - r) * 50 };
+}
+
+function fracTone(u) {
+  const w = Math.floor(u / 4), r = u % 4;
+  const f = ['', '¼', '½', '¾'][r];
+  const s = (w ? String(w) : '') + f;
+  return s || '0';
+}
+
+function stepsOf(deg) {
+  const out = [];
+  for (let i = 0; i < deg.length; i++) {
+    const next = i + 1 < deg.length ? deg[i + 1] : 24;
+    out.push(fracTone(next - deg[i]));
+  }
+  return out;
+}
+
+function cycDist(a, b) {
+  const d = Math.abs(a - b) % BINS;
+  return Math.min(d, BINS - d);
+}
+
+function window5(H) {
+  const W = new Float64Array(BINS);
+  for (let i = 0; i < BINS; i++) {
+    let s = 0;
+    for (let k = -2; k <= 2; k++) s += H[(i + k + BINS) % BINS];
+    W[i] = s;
+  }
+  return W;
+}
+
+function argmax(a) {
+  let bi = 0;
+  for (let i = 1; i < a.length; i++) if (a[i] > a[bi]) bi = i;
+  return bi;
+}
+
+function tick() { return new Promise((r) => setTimeout(r, 0)); }
+
+/* x: mono Float32Array, sr: sample rate. Returns { H, Hfinal, stats } or throws Error('no_pitch'). */
+async function analyze(x, sr, onProgress) {
+  const f = Math.max(1, Math.round(sr / 16000));
+  const fs = sr / f;
+  const n = Math.floor(x.length / f);
+  const y = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    let s = 0;
+    for (let j = 0; j < f; j++) s += x[i * f + j];
+    y[i] = s / f;
+  }
+  const W = 768, hop = 512;
+  const tauMax = Math.floor(fs / 65), tauMin = Math.max(2, Math.floor(fs / 1000));
+  const nFrames = Math.floor((n - W - tauMax) / hop);
+  if (nFrames < 20) throw new Error('too_short');
+
+  const rms = new Float32Array(nFrames);
+  for (let i = 0; i < nFrames; i++) {
+    let s = 0; const o = i * hop;
+    for (let j = 0; j < W; j++) s += y[o + j] * y[o + j];
+    rms[i] = Math.sqrt(s / W);
+  }
+  const sorted = Array.from(rms).sort((a, b) => a - b);
+  const p90 = sorted[Math.floor(sorted.length * 0.9)];
+  const gate = Math.max(1e-4, 0.15 * p90);
+
+  const d = new Float32Array(tauMax + 2), cm = new Float32Array(tauMax + 2);
+  const cents = new Float32Array(nFrames).fill(NaN);
+  const conf = new Float32Array(nFrames);
+
+  for (let i = 0; i < nFrames; i++) {
+    if (i % 150 === 0) {
+      if (onProgress) onProgress(i / nFrames);
+      await tick();
+    }
+    if (rms[i] < gate) continue;
+    const o = i * hop;
+    for (let tau = 1; tau <= tauMax; tau++) {
+      let s = 0;
+      for (let j = 0; j < W; j++) { const df = y[o + j] - y[o + j + tau]; s += df * df; }
+      d[tau] = s;
+    }
+    cm[0] = 1;
+    let run = 0;
+    for (let tau = 1; tau <= tauMax; tau++) { run += d[tau]; cm[tau] = run > 0 ? (d[tau] * tau) / run : 1; }
+    let tau = -1;
+    for (let t = tauMin; t < tauMax; t++) {
+      if (cm[t] < 0.15) {
+        while (t + 1 < tauMax && cm[t + 1] < cm[t]) t++;
+        tau = t; break;
+      }
+    }
+    if (tau < 0) continue;
+    let tf = tau;
+    if (tau > 1 && tau < tauMax) {
+      const a = cm[tau - 1], b = cm[tau], c = cm[tau + 1];
+      const den = a - 2 * b + c;
+      if (den !== 0) tf = tau + (a - c) / (2 * den);
+    }
+    const freq = fs / tf;
+    if (freq < 65 || freq > 1000) continue;
+    cents[i] = 1200 * Math.log2(freq / 440);
+    conf[i] = 1 - cm[tau];
+  }
+  if (onProgress) onProgress(1);
+
+  // keep only steady pitches (drop glides and note boundaries)
+  const H = new Float64Array(BINS);
+  const stableIdx = [];
+  let total = 0;
+  for (let i = 1; i < nFrames - 1; i++) {
+    const c = cents[i];
+    if (Number.isNaN(c) || Number.isNaN(cents[i - 1]) || Number.isNaN(cents[i + 1])) continue;
+    if (Math.abs(c - cents[i - 1]) > 35 || Math.abs(c - cents[i + 1]) > 35) continue;
+    const m = ((c % 1200) + 1200) % 1200;
+    H[Math.floor(m / 10) % BINS] += 1;
+    total += 1;
+    stableIdx.push(i);
+  }
+  if (total < 40) throw new Error('no_pitch');
+  for (let i = 0; i < BINS; i++) H[i] /= total;
+
+  const Hfinal = new Float64Array(BINS);
+  const tail = stableIdx.slice(-60);
+  for (const i of tail) {
+    const m = ((cents[i] % 1200) + 1200) % 1200;
+    Hfinal[Math.floor(m / 10) % BINS] += 1 / tail.length;
+  }
+  return {
+    H, Hfinal,
+    track: { cents, stableIdx: Int32Array.from(stableIdx), nFrames, hopSec: hop / fs, t0: (W / 2) / fs },
+    stats: { frames: nFrames, stable: total, seconds: (n / fs) },
+  };
+}
+
+/* ---------- phrase segmentation: find where the maqam changes ---------- */
+function lowerBound(arr, v) {
+  let lo = 0, hi = arr.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (arr[m] < v) lo = m + 1; else hi = m; }
+  return lo;
+}
+
+function histOf(cents, S, lo, hi, finalN) {
+  const H = new Float64Array(BINS), Hf = new Float64Array(BINS);
+  const n = hi - lo;
+  for (let k = lo; k < hi; k++) {
+    const m = ((cents[S[k]] % 1200) + 1200) % 1200;
+    H[Math.floor(m / 10) % BINS] += 1 / n;
+  }
+  const fl = Math.max(lo, hi - (finalN || 40)), nf = hi - fl;
+  for (let k = fl; k < hi; k++) {
+    const m = ((cents[S[k]] % 1200) + 1200) % 1200;
+    Hf[Math.floor(m / 10) % BINS] += 1 / nf;
+  }
+  return { H, Hfinal: Hf };
+}
+
+function centsDist(a, b) {
+  const d = Math.abs(a - b) % 1200;
+  return Math.min(d, 1200 - d);
+}
+
+/* Phrase segmentation. Each steady note is assigned to a quarter-tone slot on the piece's own tuning grid.
+   A Viterbi pass picks, for every moment, the pitch set that explains the notes best, paying a fixed cost
+   for every switch so brief wanderings do not count as a modulation. Returns
+   [{start, end, maqam, tonicCents, score}] with times in seconds. */
+function segmentTimeline(res, globalTop, opts) {
+  let penalty = (opts && opts.penalty) || 10;
+  const minSeg = (opts && opts.minSeconds) || 8;
+  const tr = res.track, S = tr.stableIdx, cents = tr.cents, hop = tr.hopSec;
+  const T = S.length;
+  if (T < 60) return [];
+  const timeOfObs = (k) => (tr.times ? tr.times[S[k]] : tr.t0 + S[k] * hop);
+  if (tr.times) { const span = Math.max(1, timeOfObs(T - 1) - timeOfObs(0)); penalty *= Math.max(1, (T / span) / 15); }
+  const finalN = tr.finalN || 40;
+  const anchor = globalTop.tonicCents;
+  const unitRel = (c) => Math.round(((((c - anchor) % 1200) + 1200) % 1200) / 50) % 24;
+  const U = new Uint8Array(T);
+  for (let k = 0; k < T; k++) U[k] = unitRel(cents[S[k]]);
+
+  // hypotheses = distinct pitch sets (a maqam and the one sharing its notes from another tonic are one set here)
+  const states = [], seen = {};
+  for (const m of MAQAMAT) {
+    for (let tu = 0; tu < 24; tu++) {
+      const set = Array.from(new Set(m.deg.map((d) => (tu + d) % 24))).sort((x, y) => x - y);
+      const key = set.join(',');
+      if (seen[key]) continue;
+      seen[key] = 1;
+      states.push(set);
+    }
+  }
+  const N = states.length;
+  const E = new Float64Array(N * 24);
+  for (let s = 0; s < N; s++) {
+    const inSet = new Uint8Array(24);
+    states[s].forEach((u) => { inSet[u] = 1; });
+    const sz = states[s].length;
+    const lin = Math.log(0.88 / sz), lout = Math.log(0.12 / (24 - sz));
+    for (let u = 0; u < 24; u++) E[s * 24 + u] = inSet[u] ? lin : lout;
+  }
+
+  let delta = new Float64Array(N), nd = new Float64Array(N);
+  for (let s = 0; s < N; s++) delta[s] = E[s * 24 + U[0]];
+  const sw = new Uint8Array(T * N), bestPrev = new Int16Array(T);
+  for (let t = 1; t < T; t++) {
+    let pb = -Infinity, pa = 0;
+    for (let s = 0; s < N; s++) if (delta[s] > pb) { pb = delta[s]; pa = s; }
+    bestPrev[t - 1] = pa;
+    const sc = pb - penalty, u = U[t];
+    for (let s = 0; s < N; s++) {
+      const stay = delta[s];
+      if (stay >= sc) { nd[s] = stay + E[s * 24 + u]; } else { nd[s] = sc + E[s * 24 + u]; sw[t * N + s] = 1; }
+    }
+    const tmp = delta; delta = nd; nd = tmp;
+  }
+  let cur = 0;
+  for (let s = 1; s < N; s++) if (delta[s] > delta[cur]) cur = s;
+  const path = new Int16Array(T);
+  for (let t = T - 1; t >= 0; t--) {
+    path[t] = cur;
+    if (t > 0 && sw[t * N + cur]) cur = bestPrev[t - 1];
+  }
+
+  // runs of one hypothesis, as ranges of steady-note indices
+  const timeAt = timeOfObs;
+  let runs = [];
+  for (let k = 0; k < T; k++) {
+    if (runs.length && runs[runs.length - 1].s === path[k]) runs[runs.length - 1].b = k + 1;
+    else runs.push({ s: path[k], a: k, b: k + 1 });
+  }
+  const dur = (r) => timeAt(r.b - 1) - timeAt(r.a);
+  for (let guard = 0; guard < 200 && runs.length > 1; guard++) {
+    const j = runs.findIndex((r) => dur(r) < minSeg);
+    if (j < 0) break;
+    const nb = j > 0 ? runs[j - 1] : runs[j + 1];
+    if (j > 0) { nb.b = runs[j].b; runs.splice(j, 1); }
+    else { nb.a = runs[j].a; runs.splice(j, 1); }
+    const merged = [];
+    runs.forEach((r) => { const p = merged[merged.length - 1]; if (p && p.s === r.s) p.b = r.b; else merged.push(r); });
+    runs = merged;
+  }
+
+  // name every phrase from its own notes; a boundary sits between the last note of one and the first of the next
+  const segs = runs.map((r, i) => {
+    const top = rank(histOf(cents, S, r.a, r.b, finalN))[0];
+    const start = i === 0 ? timeAt(r.a) : (timeAt(r.a - 1) + timeAt(r.a)) / 2;
+    const end = i === runs.length - 1 ? timeAt(r.b - 1) : (timeAt(r.b - 1) + timeAt(r.b)) / 2;
+    return { start, end, maqam: top.maqam, tonicCents: top.tonicCents, score: top.score };
+  });
+  const merged = [];
+  for (const s of segs) {
+    const p = merged[merged.length - 1];
+    if (p && p.maqam.id === s.maqam.id && centsDist(p.tonicCents, s.tonicCents) < 35) p.end = s.end;
+    else merged.push(Object.assign({}, s));
+  }
+  return merged;
+}
+
+/* Score every maqam at every possible tonic; return best tonic per maqam, sorted. */
+function rank(res) {
+  const H = res.H;
+  const W = window5(H);
+  const finalBin = argmax(window5(res.Hfinal));
+  const peakBin = argmax(W);
+  const out = [];
+  for (const m of MAQAMAT) {
+    let best = null;
+    const D = m.deg.length;
+    for (let t = 0; t < BINS; t++) {
+      let inTot = 0, pres = 0, ws = 0;
+      for (let j = 0; j < D; j++) {
+        const w = m.w ? m.w[j] : 1;
+        const mass = W[(t + 5 * m.deg[j]) % BINS];
+        inTot += mass;
+        pres += w * Math.min(1, mass / 0.04);
+        ws += w;
+      }
+      pres /= ws;
+      const m0 = W[t];
+      const tonicTerm = 0.8 + 0.2 * Math.min(1, m0 / 0.1);
+      const base = inTot * (0.55 + 0.45 * pres) * tonicTerm;
+      const fin = Math.exp(-Math.pow(cycDist(t, finalBin) / 3, 2));
+      const pk = Math.exp(-Math.pow(cycDist(t, peakBin) / 3, 2));
+      const score = base + 0.12 * fin + 0.03 * pk;
+      if (!best || score > best.score) best = { maqam: m, t, score, inTot, pres, fin };
+    }
+    // refine tonic pitch (cents from A440) with a weighted mean around the bin
+    let sw = 0, so = 0;
+    for (let k = -2; k <= 2; k++) { const v = H[(best.t + k + BINS) % BINS]; sw += v; so += v * k; }
+    best.tonicCents = ((best.t * 10 + 5 + (sw > 0 ? (so / sw) * 10 : 0)) % 1200 + 1200) % 1200;
+    out.push(best);
+  }
+  out.sort((a, b) => b.score - a.score);
+  return out;
+}
+
+
+/* ---------- full-mix analysis: spectral peaks instead of a single tracked pitch ---------- */
+function fftInPlace(re, im) {
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) { let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = (-2 * Math.PI) / len, wr = Math.cos(ang), wi = Math.sin(ang);
+    for (let i = 0; i < n; i += len) {
+      let cr = 1, ci = 0;
+      for (let k = 0; k < len / 2; k++) {
+        const a = i + k, b = a + len / 2;
+        const xr = re[b] * cr - im[b] * ci, xi = re[b] * ci + im[b] * cr;
+        re[b] = re[a] - xr; im[b] = im[a] - xi; re[a] += xr; im[a] += xi;
+        const t = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = t;
+      }
+    }
+  }
+}
+
+async function analyzePoly(x, sr, onProgress) {
+  const f = Math.max(1, Math.round(sr / 16000));
+  const fs = sr / f, n = Math.floor(x.length / f);
+  const y = new Float32Array(n);
+  for (let i = 0; i < n; i++) { let s = 0; for (let j = 0; j < f; j++) s += x[i * f + j]; y[i] = s / f; }
+  const N = 4096, hop = 2048;
+  const nFrames = Math.floor((n - N) / hop);
+  if (nFrames < 20) throw new Error('too_short');
+  const win = new Float64Array(N);
+  for (let i = 0; i < N; i++) win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (N - 1));
+  const binHz = fs / N, kmin = Math.ceil(90 / binHz), kmax = Math.floor(1100 / binHz);
+  const re = new Float64Array(N), im = new Float64Array(N), mag = new Float64Array(N / 2);
+  const frames = [];
+  for (let fr = 0; fr < nFrames; fr++) {
+    if (fr % 60 === 0) { if (onProgress) onProgress(fr / nFrames); await tick(); }
+    const o = fr * hop;
+    for (let i = 0; i < N; i++) { re[i] = y[o + i] * win[i]; im[i] = 0; }
+    fftInPlace(re, im);
+    for (let k = 0; k < N / 2; k++) mag[k] = Math.sqrt(re[k] * re[k] + im[k] * im[k]);
+    const band = Array.prototype.slice.call(mag, kmin, kmax + 1).sort((a, b) => a - b);
+    const med = band[band.length >> 1] || 0;
+    const thr = Math.max(4 * med, 1e-6);
+    const cand = [];
+    for (let k = kmin; k <= kmax; k++) {
+      if (mag[k] > thr && mag[k] > mag[k - 1] && mag[k] >= mag[k + 1]) {
+        const a = Math.log(mag[k - 1] + 1e-12), b = Math.log(mag[k] + 1e-12), c = Math.log(mag[k + 1] + 1e-12);
+        const den = a - 2 * b + c;
+        const d = den !== 0 ? (0.5 * (a - c)) / den : 0;
+        cand.push({ f: (k + d) * binHz, m: mag[k] });
+      }
+    }
+    cand.sort((p, q) => q.m - p.m);
+    const keep = [];
+    for (const p of cand) {
+      if (keep.length >= 6) break;
+      let harm = false;
+      for (const q of keep) {
+        for (const r of [3, 5]) { // a third or fifth harmonic is not a melody note
+          if (Math.abs(1200 * Math.log2(p.f / (q.f * r))) < 15) harm = true;
+        }
+      }
+      if (!harm) keep.push(p);
+    }
+    frames.push(keep.map((p) => 1200 * Math.log2(p.f / 440)));
+  }
+  if (onProgress) onProgress(1);
+  // keep partials that persist at the same pitch in a neighbouring frame (tonal, not noise)
+  const cents = [], times = [];
+  const near = (arr, c) => { for (let i = 0; i < arr.length; i++) if (Math.abs(arr[i] - c) < 30) return true; return false; };
+  for (let fr = 0; fr < nFrames; fr++) {
+    const t = (fr * hop + N / 2) / fs;
+    for (const c of frames[fr]) {
+      if ((fr > 0 && near(frames[fr - 1], c)) || (fr + 1 < nFrames && near(frames[fr + 1], c))) { cents.push(c); times.push(t); }
+    }
+  }
+  const M = cents.length;
+  if (M < 200) throw new Error('no_pitch');
+  const H = new Float64Array(BINS);
+  for (let i = 0; i < M; i++) H[Math.floor((((cents[i] % 1200) + 1200) % 1200) / 10) % BINS] += 1 / M;
+  const Hfinal = new Float64Array(BINS);
+  const tail = Math.min(150, M);
+  for (let i = M - tail; i < M; i++) Hfinal[Math.floor((((cents[i] % 1200) + 1200) % 1200) / 10) % BINS] += 1 / tail;
+  const S = new Int32Array(M); for (let i = 0; i < M; i++) S[i] = i;
+  return {
+    H, Hfinal, mode: 'poly',
+    track: { cents: Float32Array.from(cents), times: Float64Array.from(times), stableIdx: S, nFrames, hopSec: hop / fs, t0: 0, finalN: 150 },
+    stats: { frames: nFrames, stable: M, seconds: n / fs },
+  };
+}
+
+/* mono tracker first; when the clip is a dense mix and few steady pitches exist, fall back to spectral peaks */
+async function analyzeAuto(x, sr, onProgress) {
+  let res = null;
+  try { res = await analyze(x, sr, (p) => onProgress && onProgress(p * 0.5)); } catch (e) { if (e.message !== 'no_pitch') throw e; }
+  const dur = x.length / sr;
+  if (res && res.stats.stable / dur >= 6) return res;
+  const poly = await analyzePoly(x, sr, (p) => onProgress && onProgress(0.5 + p * 0.5));
+  return poly;
+}
+
+/* ---------- synthetic singer, used for demos and for testing ---------- */
+function rng(seed) {
+  let s = seed >>> 0;
+  return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+}
+
+function synthMelody(deg, f0, sr, seed) {
+  const r = rng(seed);
+  const n = deg.length;
+  const unit = (k) => { const o = Math.floor(k / n); const m = ((k % n) + n) % n; return deg[m] + 24 * o; };
+  const seq = [];
+  const push = (k, dur) => seq.push([unit(k), dur]);
+  let k = 0;
+  push(0, 0.9);
+  for (let i = 0; i < 50; i++) {
+    const p = r();
+    const st = p < 0.25 ? -1 : p < 0.5 ? 1 : p < 0.65 ? -2 : p < 0.8 ? 2 : p < 0.9 ? 0 : (r() < 0.5 ? 3 : -3);
+    k += st;
+    if (k > n + 1) k -= 3;
+    if (k < -2) k += 3;
+    push(k, 0.3 + r() * 0.5);
+  }
+  for (let j = 0; j <= n; j++) push(j, 0.4);
+  for (let j = n - 1; j >= 0; j--) push(j, 0.35);
+  push(0, 1.8);
+
+  let totalDur = 0;
+  for (const s of seq) totalDur += s[1] + 0.03;
+  const out = new Float32Array(Math.ceil(totalDur * sr) + 16);
+  const H = [1, 0.5, 0.33, 0.22, 0.15];
+  let pos = 0, ph = 0, lf = Math.log2(f0), vph = 0;
+  const a = 1 - Math.exp(-1 / (0.03 * sr));
+  for (const [u, dur] of seq) {
+    const target = Math.log2(f0) + (u * 50 + (r() - 0.5) * 24) / 1200;
+    const ns = Math.floor(dur * sr);
+    for (let i = 0; i < ns; i++) {
+      lf += (target - lf) * a;
+      vph += (2 * Math.PI * 5.5) / sr;
+      const vib = ((dur > 0.6 ? 12 : 5) / 1200) * Math.sin(vph);
+      ph += (2 * Math.PI * Math.pow(2, lf + vib)) / sr;
+      let amp = 1;
+      const t = i / sr;
+      if (t < 0.015) amp = t / 0.015;
+      const rem = (ns - i) / sr;
+      if (rem < 0.04) amp = Math.min(amp, rem / 0.04);
+      let s = 0;
+      for (let h = 0; h < H.length; h++) s += H[h] * Math.sin((h + 1) * ph);
+      out[pos + i] = 0.25 * amp * s + (r() - 0.5) * 0.004;
+    }
+    pos += ns + Math.floor(0.03 * sr);
+  }
+  return out;
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = { MAQAMAT, BINS, analyze, analyzePoly, analyzeAuto, rank, segmentTimeline, synthMelody, noteFromCents, stepsOf, fracTone, unitName };
+}
+
+</script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var resultEl = $('result');
+  var busy = false;
+  var audioCtx = null;
+
+  // ---- demo select ----
+  var DEMO_TONICS = [146.83, 130.81, 164.81, 174.61, 196.0];
+  var sel = $('demoSel');
+  MAQAMAT.forEach(function (m, i) {
+    var o = document.createElement('option');
+    o.value = String(i); o.textContent = m.ar;
+    sel.appendChild(o);
+  });
+  var mixOpt = document.createElement('option');
+  mixOpt.value = 'mix'; mixOpt.textContent = 'ثلاث نقلات (بياتي ← حجاز ← راست)';
+  sel.insertBefore(mixOpt, sel.firstChild);
+  sel.value = 'mix';
+
+  var job = 0;
+  function setBusy(b) { busy = b; }
+
+  function showProgress(label) {
+    resultEl.innerHTML = '<div class="card"><p class="busy" id="busyTxt"></p><div class="progress"><i id="progBar"></i></div></div>';
+    $('busyTxt').textContent = label;
+  }
+  function onProgress(p) {
+    var bar = $('progBar'); if (bar) bar.style.width = Math.round(p * 100) + '%';
+  }
+  function showError(msg) {
+    resultEl.innerHTML = '<p class="err"></p>';
+    resultEl.firstChild.textContent = msg;
+  }
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  // ---- chart ----
+  function chartSVG(res, top) {
+    var H = res.H, t = top.t, m = top.maqam;
+    var sm = new Float64Array(BINS), K = 4;
+    for (var i = 0; i < BINS; i++) {
+      var s = 0, w = 0;
+      for (var k = -K; k <= K; k++) { var g = Math.exp(-(k * k) / (2 * 1.3 * 1.3)); s += g * H[(i + k + BINS) % BINS]; w += g; }
+      sm[i] = s / w;
+    }
+    var mx = 0; for (i = 0; i < BINS; i++) if (sm[i] > mx) mx = sm[i];
+    var X0 = 8, PW = 344, base = 104, ph = 92, bw = PW / BINS;
+    var d = 'M' + X0 + ' ' + base;
+    for (var j = 0; j < BINS; j++) {
+      var v = sm[(t - 5 + j + 2 * BINS) % BINS] / (mx || 1);
+      d += ' L' + (X0 + (j + 0.5) * bw).toFixed(1) + ' ' + (base - v * ph).toFixed(1);
+    }
+    d += ' L' + (X0 + PW) + ' ' + base + ' Z';
+    var out = '<svg viewBox="0 0 360 132" role="img" aria-label="توزيع النغمات المسموعة بالنسبة إلى القرار">';
+    out += '<line class="base" x1="' + X0 + '" y1="' + base + '" x2="' + (X0 + PW) + '" y2="' + base + '"/>';
+    out += '<path class="area" d="' + d + '"/>';
+    var cum = 0;
+    m.deg.forEach(function (u) {
+      var x = X0 + (5 + 5 * u + 0.5) * bw;
+      out += '<line class="tick" x1="' + x.toFixed(1) + '" y1="8" x2="' + x.toFixed(1) + '" y2="' + base + '"/>';
+      out += '<text class="' + (u === 0 ? 'ton' : '') + '" x="' + x.toFixed(1) + '" y="121">' + fracTone(u) + '</text>';
+    });
+    return out + '</svg>';
+  }
+
+  // ---- render result ----
+  function levelOf(r) {
+    var gap = r[0].score - r[1].score;
+    if (r[0].score < 0.55) return { k: 'close', t: 'غير حاسم', note: 'الصوت لا يطابق أي مقام بوضوح. جرّب مقطعًا أطول أو أنقى.' };
+    if (gap < 0.04) return { k: 'close', t: 'غير حاسم', note: 'قريب أيضًا من ' + r[1].maqam.ar + '.' };
+    if (gap < 0.1) return { k: 'mid', t: 'محتمل', note: 'يقترب منه ' + r[1].maqam.ar + '.' };
+    return { k: 'high', t: 'واضح', note: '' };
+  }
+
+  var lastTop = null;
+  function fmt(s) { var m = Math.floor(s / 60), x = Math.floor(s % 60); return (m < 10 ? '0' : '') + m + ':' + (x < 10 ? '0' : '') + x; }
+  function hueOf(m) { return (MAQAMAT.indexOf(m) * 29 + 215) % 360; }
+  function timelineHTML(segs) {
+    if (!segs.length) return '';
+    var total = segs[segs.length - 1].end - segs[0].start || 1;
+    var strip = segs.map(function (g) {
+      return '<i style="flex:' + ((g.end - g.start) / total).toFixed(4) + ';background:hsl(' + hueOf(g.maqam) + ' 52% 46%)"></i>';
+    }).join('');
+    var rows = segs.map(function (g, i) {
+      var nn = noteFromCents(g.tonicCents);
+      return '<li class="ph"><time>' + fmt(g.start) + ' ← ' + fmt(g.end) + '</time><div><span class="n"><span class="dot" style="background:hsl(' + hueOf(g.maqam) + ' 52% 46%)"></span>' + esc(g.maqam.ar) + '</span> <span class="on">على ' + esc(nn.name) + '</span>' +
+        (i > 0 ? '<span class="sh">نقلة عند ' + fmt(g.start) + ' من ' + esc(segs[i - 1].maqam.ar) + '</span>' : '') + '</div></li>';
+    }).join('');
+    var cap = segs.length === 1 ? 'لم تُرصد نقلات، المقام ثابت طوال المقطع.' : 'عدد النقلات: ' + (segs.length - 1) + '. أقصر جملة يلتقطها التحليل نحو 8 ثوانٍ، والتوقيتات تقريبية بفارق بضع ثوانٍ.';
+    return '<h2>الجمل والنقلات</h2><div class="strip" role="img" aria-label="شريط زمني للمقامات">' + strip + '</div><ol class="phrases">' + rows + '</ol><p class="cap">' + cap + '</p>';
+  }
+
+  function render(res, label, isDemo) {
+    var r = rank(res), top = r[0], lv = levelOf(r);
+    var segs = [];
+    try { segs = segmentTimeline(res, top); } catch (e) { segs = []; }
+    lastTop = top;
+    var nn = noteFromCents(top.tonicCents);
+    var dev = Math.round(nn.dev);
+    var steps = stepsOf(top.maqam.deg).map(function (s) { return '<b>' + s + '</b>'; }).join(' · ');
+    var pct = function (x) { return Math.max(1, Math.min(100, Math.round(100 * x.score / 1.15))); };
+    var html = '<article class="card">' +
+      '<div class="meta"><span class="chip" id="srcChip"></span><span>' + Math.round(res.stats.seconds) + ' ثانية</span></div>' +
+      '<div class="name" id="maqamName"></div>' +
+      '<p class="tonic">القرار: ' + esc(nn.name) + ' <small>(الضبط ' + (dev >= 0 ? '+' : '−') + Math.abs(dev) + ' سنت عن 440)</small></p>' +
+      '<p class="steps">' + steps + '</p>' +
+      '<div class="verdict"><span class="badge ' + lv.k + '">' + lv.t + '</span><span class="note">' + esc((res.mode === 'poly' ? 'مقطع بآلات متعددة، فالتحليل أقل دقة. ' : '') + (segs.length > 1 ? 'المقطع ينتقل بين ' + segs.length + ' جمل بمقامات مختلفة، وهذا الأقرب للمجموع. ' : '') + lv.note) + '</span></div>' +
+      '<div class="row-actions"><button class="small" id="playBtn" type="button">▶ اسمع سلّم المقام</button></div>' +
+      timelineHTML(segs) +
+      '<h2>أقرب المقامات</h2><ul class="alts">' +
+      r.slice(0, 3).map(function (x, i) {
+        return '<li class="alt' + (i === 0 ? ' first' : '') + '"><span class="n">' + esc(x.maqam.ar) + '</span><div class="bar"><i style="width:' + pct(x) + '%"></i></div><span class="p">' + pct(x) + '%</span></li>';
+      }).join('') + '</ul>' +
+      '<h2>بصمة النغمات</h2><div class="chart">' + chartSVG(res, top) + '</div>' +
+      '<p class="cap">الخطوط الذهبية هي درجات المقام، والأرقام هي البُعد عن القرار بالتون (التون = 200 سنت).</p>' +
+      '</article>';
+    resultEl.innerHTML = html;
+    $('maqamName').textContent = top.maqam.ar;
+    $('srcChip').textContent = (isDemo ? 'نموذج صناعي · ' : '') + label;
+    $('playBtn').addEventListener('click', playScale);
+  }
+
+  // ---- play the detected scale ----
+  function playScale() {
+    if (!lastTop) return;
+    var btn = $('playBtn');
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.resume) audioCtx.resume();
+    } catch (e) { btn.textContent = 'الصوت غير متاح هنا'; btn.disabled = true; return; }
+    var f = 440 * Math.pow(2, lastTop.tonicCents / 1200);
+    while (f < 150) f *= 2;
+    while (f > 300) f /= 2;
+    var degs = lastTop.maqam.deg.concat([24]);
+    var t0 = audioCtx.currentTime + 0.05, step = 0.5;
+    degs.forEach(function (u, i) {
+      var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'triangle';
+      o.frequency.value = f * Math.pow(2, (u * 50) / 1200);
+      var s = t0 + i * step;
+      g.gain.setValueAtTime(0, s);
+      g.gain.linearRampToValueAtTime(0.28, s + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.001, s + step * 0.95);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(s); o.stop(s + step);
+    });
+    btn.disabled = true;
+    var old = btn.textContent; btn.textContent = 'جارٍ التشغيل…';
+    setTimeout(function () { btn.disabled = false; btn.textContent = old; }, degs.length * step * 1000 + 100);
+  }
+
+  // ---- demo ----
+  function mixSignal() {
+    var parts = [[1, 146.83], [2, 146.83], [0, 130.81]];
+    var chunks = parts.map(function (q, i) { return synthMelody(MAQAMAT[q[0]].deg, q[1], 16000, 900 + i * 7); });
+    var n = 0; chunks.forEach(function (c) { n += c.length; });
+    var x = new Float32Array(n), pos = 0;
+    chunks.forEach(function (c) { x.set(c, pos); pos += c.length; });
+    return x;
+  }
+  function runDemo(which) {
+    var my = ++job;
+    var isMix = which === 'mix', idx = isMix ? 0 : parseInt(which, 10);
+    var m = MAQAMAT[idx], f0 = DEMO_TONICS[idx % DEMO_TONICS.length];
+    setBusy(true);
+    showProgress(isMix ? 'نولّد مقطعًا بثلاث نقلات ونحلّله…' : 'نولّد نموذجًا بمقام ' + m.ar + ' ونحلّله…');
+    setTimeout(function () {
+      var x = isMix ? mixSignal() : synthMelody(m.deg, f0, 16000, 500 + idx);
+      analyze(x, 16000, function (p) { if (my === job) onProgress(p); }).then(function (res) {
+        if (my !== job) return;
+        render(res, isMix ? 'بياتي ← حجاز ← راست (مولَّد)' : 'مقام ' + m.ar + ' (مولَّد)', true);
+      }).catch(function () { if (my === job) showError('تعذّر تحليل النموذج.'); }).then(function () { if (my === job) setBusy(false); });
+    }, 30);
+  }
+  $('demoBtn').addEventListener('click', function () { runDemo(sel.value); });
+
+  // ---- file / recording ----
+  function toMono(audio) {
+    var sr = audio.sampleRate, ch = audio.numberOfChannels;
+    var len = Math.min(audio.length, Math.floor(360 * sr));
+    var out = new Float32Array(len);
+    for (var c = 0; c < ch; c++) {
+      var d = audio.getChannelData(c);
+      for (var i = 0; i < len; i++) out[i] += d[i] / ch;
+    }
+    return { data: out, sr: sr, capped: audio.length > len };
+  }
+
+  function readBuf(file) {
+    if (file.arrayBuffer) return file.arrayBuffer();
+    return new Promise(function (ok, bad) {
+      var fr = new FileReader();
+      fr.onload = function () { ok(fr.result); };
+      fr.onerror = function () { bad(fr.error); };
+      fr.readAsArrayBuffer(file);
+    });
+  }
+
+  function handleFile(file) {
+    if (!file) return;
+    var my = ++job;
+    setBusy(true);
+    showProgress('وصل الملف «' + (file.name || 'تسجيل') + '». نفكّ ترميزه…');
+    readBuf(file).then(function (buf) {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      var ac = new Ctx();
+      return new Promise(function (ok, bad) { ac.decodeAudioData(buf, ok, bad); }).then(function (a) {
+        if (ac.close) ac.close();
+        return a;
+      });
+    }).then(function (audio) {
+      var mono = toMono(audio);
+      if (my !== job) throw new Error('stale');
+      showProgress(mono.capped ? 'نحلّل أول 6 دقائق من المقطع…' : 'نحلّل النغمات…');
+      return analyzeAuto(mono.data, mono.sr, function (p) { if (my === job) onProgress(p); });
+    }).then(function (res) {
+      if (my !== job) return;
+      render(res, file.name || 'تسجيل', false);
+    }).catch(function (e) {
+      if (my !== job) return;
+      var msg = e && e.message;
+      if (msg === 'no_pitch') showError('لم أجد نغمات واضحة. تأكد أن الصوت قريب وهادئ الخلفية، وجرّب مقطعًا أطول.');
+      else if (msg === 'too_short') showError('المقطع قصير جدًا. سجّل 10 ثوانٍ على الأقل.');
+      else showError('تعذّر قراءة هذا الملف. جرّب صيغة أخرى مثل m4a أو mp3 أو wav.');
+    }).then(function () { if (my === job) setBusy(false); });
+  }
+  ['rec', 'up', 'plain'].forEach(function (id) {
+    $(id).addEventListener('change', function (e) {
+      var f = e.target.files && e.target.files[0];
+      handleFile(f);
+    });
+  });
+
+  ['dragover', 'drop'].forEach(function (t) {
+    document.addEventListener(t, function (e) {
+      if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
+      e.preventDefault();
+      if (t === 'drop') handleFile(e.dataTransfer.files[0]);
+    });
+  });
+
+  // ---- live microphone (only in the installable build; the embedded artifact cannot open the mic) ----
+  var STANDALONE = true;
+  function setupRecorder() {
+    if (typeof navigator === 'undefined' || !window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) return;
+    var btn = $('recBtn'), input = $('rec'), label = btn.querySelector('span');
+    input.style.display = 'none';
+    var rec = null, chunks = [], timer = null, t0 = 0;
+    btn.addEventListener('click', function () {
+      if (rec && rec.state === 'recording') { rec.stop(); return; }
+      navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }).then(function (st) {
+        chunks = [];
+        rec = new MediaRecorder(st);
+        rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+        rec.onstop = function () {
+          clearInterval(timer);
+          st.getTracks().forEach(function (t) { t.stop(); });
+          label.textContent = 'سجّل الآن'; btn.classList.remove('recording'); btn.classList.add('primary');
+          var blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
+          var name = 'تسجيل المايك';
+          var f; try { f = new File([blob], name, { type: blob.type }); } catch (e) { f = blob; f.name = name; }
+          handleFile(f);
+        };
+        rec.start();
+        t0 = Date.now();
+        btn.classList.remove('primary'); btn.classList.add('recording');
+        label.textContent = 'إيقاف التسجيل 00:00';
+        timer = setInterval(function () { label.textContent = 'إيقاف التسجيل ' + fmt((Date.now() - t0) / 1000); }, 500);
+      }).catch(function () {
+        showError('لم يُسمح بالوصول إلى المايك. اسمح به من إعدادات الموقع في المتصفح ثم أعد المحاولة.');
+      });
+    });
+  }
+  if (STANDALONE) setupRecorder();
+
+  // opening state: a worked example so the first screen shows what the app does
+  setTimeout(function () { runDemo('mix'); }, 50);
+})();
+</script>
+
+<script>
+if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+  window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+}
+</script>
+</body>
+</html>
