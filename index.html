@@ -846,7 +846,12 @@ async function buildSections(x, sr, res, top) {
       if (ov / Math.max(1, end - start) >= 0.5) type = 'voice';
       else if (type === 'voice' || (type === 'unknown' && vints.length)) type = 'music';
     }
-    return { start, end, type, maqam, tonicCents, score, key };
+    let vec = null;
+    if (b - a >= 30) {
+      vec = new Float64Array(24);
+      for (let k = a; k < b; k++) vec[unitRel(cents[S[k]])] += 1 / (b - a);
+    }
+    return { start, end, type, maqam, tonicCents, score, key, vec, a, b };
   };
 
   let edges = [first].concat(kept.map((c) => c.t), [lastT]);
@@ -858,20 +863,64 @@ async function buildSections(x, sr, res, top) {
     const nb = (i > 0 && segs[i - 1].type !== 'unknown') ? segs[i - 1] : (i + 1 < segs.length && segs[i + 1].type !== 'unknown' ? segs[i + 1] : null);
     if (nb) segs[i].type = nb.type;
   }
-  // neighbours with the same kind of sound and the same notes are one phrase
-  for (let guard = 0; guard < 100; guard++) {
+  // ---- one name for the same melody, everywhere in the piece ----
+  const lenOf = (sg) => sg.end - sg.start;
+  const cosine = (p, q) => { let d = 0, a2 = 0, b2 = 0; for (let i = 0; i < 24; i++) { d += p[i] * q[i]; a2 += p[i] * p[i]; b2 += q[i] * q[i]; } return a2 && b2 ? d / Math.sqrt(a2 * b2) : 0; };
+  // neighbours of the same kind with the same note profile are one phrase
+  for (let guard = 0; guard < 200; guard++) {
     let did = false;
     for (let i = 0; i + 1 < segs.length; i++) {
-      const shortOne = Math.min(segs[i].end - segs[i].start, segs[i + 1].end - segs[i + 1].start) < 15;
-      if (segs[i].type === segs[i + 1].type && (segs[i].key === segs[i + 1].key || (res.mode !== 'poly' && shortOne))) {
-        const m = describe(segs[i].start, segs[i + 1].end);
-        m.type = segs[i].type;
-        segs.splice(i, 2, m); did = true; break;
+      const p = segs[i], q = segs[i + 1];
+      const shortOne = Math.min(lenOf(p), lenOf(q)) < 15;
+      const alike = p.vec && q.vec && cosine(p.vec, q.vec) >= 0.95;
+      if (res.mode !== 'poly' && p.type === q.type && (alike || shortOne)) {
+        const d = describe(p.start, q.end);
+        d.type = p.type;
+        segs.splice(i, 2, d); did = true; break;
       }
     }
     if (!did) break;
   }
-  return segs.map((sg) => ({ start: sg.start, end: sg.end, type: sg.type, maqam: sg.maqam, tonicCents: sg.tonicCents, score: sg.score }));
+  // group phrases whose notes match (longest first), then name every group once from all of its notes together
+  const order = segs.map((sg, i) => i).filter((i) => segs[i].vec).sort((x, y) => lenOf(segs[y]) - lenOf(segs[x]));
+  const groups = [];
+  order.forEach((i) => {
+    let best = null, bs = lenOf(segs[i]) < 20 ? 0.85 : 0.92;
+    groups.forEach((g) => { const c = cosine(g.vec, segs[i].vec); if (c >= bs) { bs = c; best = g; } });
+    if (best) {
+      const w = lenOf(segs[i]), tw = best.w + w;
+      for (let k = 0; k < 24; k++) best.vec[k] = (best.vec[k] * best.w + segs[i].vec[k] * w) / tw;
+      best.w = tw; best.members.push(i);
+    } else groups.push({ vec: Float64Array.from(segs[i].vec), w: lenOf(segs[i]), members: [i] });
+  });
+  groups.forEach((g) => {
+    const H = new Float64Array(BINS); let n = 0;
+    g.members.forEach((i) => { for (let k = segs[i].a; k < segs[i].b; k++) { H[Math.floor((((cents[S[k]] % 1200) + 1200) % 1200) / 10) % BINS] += 1; n++; } });
+    for (let q = 0; q < BINS; q++) H[q] /= n || 1;
+    const longest = segs[g.members[0]];
+    const r = rank({ H, Hfinal: histOf(cents, S, longest.a, longest.b, finalN).Hfinal });
+    g.name = { maqam: r[0].maqam, tonicCents: r[0].tonicCents, score: r[0].score };
+    const close = r.slice(1).find((x) => r[0].score - x.score < 0.04);
+    g.alt = close ? close.maqam : null;
+  });
+  groups.forEach((g) => g.members.forEach((i) => { Object.assign(segs[i], g.name, { alt: g.alt, group: groups.indexOf(g) }); }));
+  // after naming, neighbours that ended up with the same name and kind are one phrase
+  for (let guard = 0; guard < 100; guard++) {
+    let did = false;
+    for (let i = 0; i + 1 < segs.length; i++) {
+      const p = segs[i], q = segs[i + 1];
+      if (res.mode !== 'poly' && p.maqam && q.maqam && p.type === q.type && p.maqam.id === q.maqam.id && centsDist(p.tonicCents, q.tonicCents) < 35) { segs.splice(i, 2, Object.assign({}, lenOf(p) >= lenOf(q) ? p : q, { start: p.start, end: q.end })); did = true; break; }
+    }
+    if (!did) break;
+  }
+  const cover = {};
+  segs.forEach((sg) => { if (sg.maqam) cover[sg.group] = (cover[sg.group] || 0) + lenOf(sg); });
+  let dom = null;
+  Object.keys(cover).forEach((k) => { if (dom === null || cover[k] > cover[dom]) dom = k; });
+  const out = segs.map((sg) => ({ start: sg.start, end: sg.end, type: sg.type, maqam: sg.maqam || null, tonicCents: sg.tonicCents == null ? null : sg.tonicCents, score: sg.score == null ? null : sg.score, alt: sg.alt || null, group: sg.maqam ? sg.group : -1 }));
+  const dg = dom === null ? null : groups[Number(dom)];
+  out.dominant = dg ? { maqam: dg.name.maqam, tonicCents: dg.name.tonicCents, score: dg.name.score, alt: dg.alt } : null;
+  return out;
 }
 
 /* ---------- synthetic singer, used for demos and for testing ---------- */
@@ -1028,7 +1077,7 @@ if (typeof module !== 'undefined') {
       var name = g.maqam ? esc(g.maqam.ar) : 'غير محدد';
       var chip = g.type === 'unknown' ? '' : '<span class="tg t-' + g.type + '">' + TYPE_AR[g.type] + '</span>';
       return '<li class="ph"><time>' + fmt(g.start) + ' ← ' + fmt(g.end) + '<small>' + Math.round(g.end - g.start) + ' ثانية</small></time><div><span class="n">' + name + '</span>' +
-        (nn ? ' <span class="on">على ' + esc(nn) + '</span>' : '') + chip + '</div></li>';
+        (nn ? ' <span class="on">على ' + esc(nn) + '</span>' : '') + (g.alt ? ' <span class="on">أو ' + esc(g.alt.ar) + '</span>' : '') + chip + '</div></li>';
     }).join('');
     var anyType = segs.some(function (g) { return g.type !== 'unknown'; });
     var cap = 'عدد الأقسام: ' + segs.length + '. أقصر قسم نحو 8 ثوانٍ، والتوقيتات تقريبية بفارق بضع ثوانٍ. ' +
@@ -1037,7 +1086,17 @@ if (typeof module !== 'undefined') {
   }
 
   function render(res, label, isDemo) {
-    var r = rank(res), top = r[0], lv = levelOf(r);
+    var r = rank(res), top = r[0];
+    var dm = res.sections && res.sections.dominant;
+    if (dm) {
+      // the headline is the name that covers most of the clip, so it always agrees with the sections below
+      var ent = r.filter(function (x) { return x.maqam.id === dm.maqam.id; })[0] || r[0];
+      var tb = Math.floor((((dm.tonicCents % 1200) + 1200) % 1200) / 10) % BINS;
+      top = Object.assign({}, ent, { maqam: dm.maqam, tonicCents: dm.tonicCents, score: dm.score, t: tb });
+      r = [top].concat(r.filter(function (x) { return x.maqam.id !== dm.maqam.id; }));
+    }
+    var lv = levelOf(r);
+    if (dm && dm.alt) lv = { k: 'close', t: 'غير حاسم', note: 'قريب أيضًا من ' + dm.alt.ar + '.' };
     var segs = res.sections || [];
     lastTop = top;
     var nn = noteFromCents(top.tonicCents);
