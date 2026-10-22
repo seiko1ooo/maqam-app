@@ -4,180 +4,86 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2a4fa8">
+<title>كاشف المقام</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}:root{color-scheme:light dark}</style>
-<title>كاشف المقام</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@400;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@700&family=IBM+Plex+Sans+Arabic:wght@400;600&display=swap">
 <style>
 :root {
-  /* Layout: one phone-width column. Two big input buttons on top, then a result card led by the maqam name in calligraphic type, then the pitch fingerprint chart. */
-  --bg: #eceff4;
-  --surface: #f8f9fc;
-  --fg: #14213a;
-  --muted: #56627a;
-  --line: #d3d9e6;
-  --accent: #2a4fa8;
-  --accent-fg: #ffffff;
-  --gold: #9a6200;
-  --gold-soft: #efe1bd;
-  --display: 'Aref Ruqaa', 'Noto Naskh Arabic', 'Amiri', serif;
+  /* One screen: name, one big round record button, the answer underneath. */
+  --bg: #eceff4; --surface: #f8f9fc; --fg: #14213a; --muted: #56627a; --line: #d3d9e6;
+  --accent: #2a4fa8; --accent-fg: #ffffff; --gold: #9a6200; --gold-soft: #efe1bd; --rec: #b3261e;
+  --display: 'Aref Ruqaa', 'Noto Naskh Arabic', serif;
   --body: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, system-ui, sans-serif;
+  color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0d1322; --surface: #151d31; --fg: #e7ecf7; --muted: #93a0bb; --line: #26314a;
-    --accent: #86a8ff; --accent-fg: #0d1322; --gold: #e3b45a; --gold-soft: #3a3020;
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #0d1322; --surface: #151d31; --fg: #e7ecf7; --muted: #93a0bb; --line: #26314a;
-  --accent: #86a8ff; --accent-fg: #0d1322; --gold: #e3b45a; --gold-soft: #3a3020;
-  color-scheme: dark;
+  :root { --bg: #0d1322; --surface: #151d31; --fg: #e7ecf7; --muted: #93a0bb; --line: #26314a;
+    --accent: #86a8ff; --accent-fg: #0d1322; --gold: #e3b45a; --gold-soft: #3a3020; --rec: #ff8a80; color-scheme: dark; }
 }
 * { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
 body {
-  background: var(--bg); color: var(--fg);
-  font: 15px/1.65 var(--body);
-  direction: rtl;
-  padding-block: 20px 40px;
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: var(--bg); color: var(--fg); font: 16px/1.6 var(--body);
+  padding: max(24px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(24px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
 }
-.app { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
-.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+main { max-width: 440px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; align-items: center; gap: 22px; text-align: center; }
+h1 { font: 700 34px/1.2 var(--display); color: var(--accent); margin: 8px 0 0; }
+.sub { margin: -14px 0 0; color: var(--muted); font-size: 15px; }
 
-.top h1 { font: 700 34px/1.2 var(--display); margin: 0 0 4px; color: var(--accent); text-wrap: balance; }
-.top p { margin: 0; color: var(--muted); max-width: 40ch; }
-
-.inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.btn {
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  min-height: 58px; padding: 10px 14px; border-radius: 14px; border: 1.5px solid var(--accent);
-  font: 600 16px/1.2 var(--body); cursor: pointer; user-select: none; text-align: center;
-  background: transparent; color: var(--accent);
+.rec {
+  width: 168px; height: 168px; border-radius: 50%; border: 0; cursor: pointer;
+  background: var(--accent); color: var(--accent-fg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  font: 600 18px/1.2 var(--body); box-shadow: 0 10px 30px -12px var(--accent);
+  -webkit-tap-highlight-color: transparent;
 }
-.btn { position: relative; overflow: hidden; }
-.cover { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 0; }
-.alt-pick { font-size: 13px; color: var(--muted); }
-.alt-pick summary { cursor: pointer; padding: 4px 0; }
-.alt-pick input { display: block; margin-top: 8px; max-width: 100%; color: var(--fg); font: 14px var(--body); }
-.btn svg { width: 22px; height: 22px; flex: none; }
-.btn.primary { background: var(--accent); color: var(--accent-fg); }
-.btn.recording { background: var(--gold); border-color: var(--gold); color: var(--accent-fg); }
-.btn.drag { outline: 3px dashed var(--gold); outline-offset: 2px; }
-.btn:focus-within, .btn:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
-.hint { margin: 0; font-size: 13px; color: var(--muted); }
+.rec svg { width: 46px; height: 46px; }
+.rec.on { background: var(--rec); box-shadow: 0 0 0 0 var(--rec); animation: pulse 1.4s infinite; }
+.rec:disabled { opacity: .55; cursor: default; }
+.rec:focus-visible { outline: 3px solid var(--gold); outline-offset: 4px; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(179,38,30,.45); } 100% { box-shadow: 0 0 0 26px rgba(179,38,30,0); } }
+@media (prefers-reduced-motion: reduce) { .rec.on { animation: none; } }
 
-.demo { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.demo label { font-size: 13px; color: var(--muted); }
-select, .small {
-  font: 500 14px/1.2 var(--body); color: var(--fg); background: var(--surface);
-  border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; min-height: 40px;
-}
-.small { cursor: pointer; }
-.small:focus-visible, select:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
-.small[disabled] { opacity: .5; cursor: default; }
+.status { min-height: 52px; color: var(--muted); font-size: 15px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.time { font: 600 22px/1 var(--body); color: var(--fg); font-variant-numeric: tabular-nums; direction: ltr; }
+.meter { width: 180px; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .1s; }
 
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 18px 16px 16px; min-width: 0; }
-.meta { display: flex; justify-content: space-between; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); }
-.chip { background: var(--gold-soft); color: var(--gold); border-radius: 999px; padding: 2px 10px; font-weight: 600; font-size: 12.5px; max-width: 62%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.name { font: 700 clamp(56px, 19vw, 88px)/1.15 var(--display); color: var(--accent); margin: 6px 0 0; text-wrap: balance; }
-.tonic { font-size: 17px; font-weight: 600; margin: 0; }
-.tonic small { font-weight: 400; color: var(--muted); font-size: 13px; }
-.steps { direction: ltr; text-align: right; font-size: 13px; color: var(--muted); margin: 6px 0 0; font-variant-numeric: tabular-nums; letter-spacing: .03em; }
-.steps b { color: var(--fg); font-weight: 600; }
-.verdict { display: flex; align-items: center; gap: 10px; margin: 14px 0 4px; flex-wrap: wrap; }
-.badge { font-weight: 600; font-size: 13px; border-radius: 8px; padding: 3px 10px; border: 1px solid currentColor; }
-.badge.high { color: var(--accent); }
-.badge.mid, .badge.close { color: var(--gold); }
-.verdict span.note { font-size: 13.5px; color: var(--muted); }
-.row-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.result { width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 18px 16px 20px; }
+.label { color: var(--muted); font-size: 14px; margin: 0; }
+.name { font: 700 clamp(64px, 22vw, 96px)/1.15 var(--display); color: var(--accent); margin: 4px 0; }
+.tonic { font-size: 18px; font-weight: 600; margin: 0; }
+.also { margin: 10px 0 0; color: var(--gold); font-size: 15px; font-weight: 600; }
+.small { margin-top: 14px; font: 600 15px var(--body); color: var(--accent); background: transparent; border: 1.5px solid var(--accent); border-radius: 12px; padding: 9px 16px; cursor: pointer; }
+.small:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.err { width: 100%; background: var(--gold-soft); color: var(--fg); border-radius: 14px; padding: 12px 14px; margin: 0; }
 
-h2 { font: 600 15px/1.4 var(--body); margin: 20px 0 8px; }
-.alts { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
-.alt { display: grid; grid-template-columns: 5.5em 1fr 3em; gap: 10px; align-items: center; }
-.alt .n { font: 700 20px/1.2 var(--display); }
-.bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; direction: rtl; }
-.bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
-.alt.first .bar i { background: var(--accent); }
-.alt:not(.first) .bar i { background: var(--muted); opacity: .6; }
-.alt .p { font-size: 13px; color: var(--muted); text-align: left; font-variant-numeric: tabular-nums; direction: ltr; }
-
-.chart { direction: ltr; width: 100%; }
-.chart svg { display: block; width: 100%; height: auto; }
-.chart .area { fill: var(--accent); fill-opacity: .22; stroke: var(--accent); stroke-width: 1.4; }
-.chart .tick { stroke: var(--gold); stroke-width: 1; stroke-dasharray: 3 3; }
-.chart .base { stroke: var(--line); stroke-width: 1; }
-.chart text { fill: var(--muted); font: 500 10px var(--body); text-anchor: middle; }
-.chart text.ton { fill: var(--gold); font-weight: 600; }
-.cap { font-size: 12.5px; color: var(--muted); margin: 6px 0 0; }
-
-.progress { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin: 14px 0 6px; }
-.progress i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
-.busy { color: var(--muted); font-size: 14px; margin: 0; }
-.err { color: var(--fg); background: var(--gold-soft); border-radius: 12px; padding: 12px 14px; margin: 0; }
-
-.strip { display: flex; gap: 2px; height: 22px; direction: ltr; border-radius: 6px; overflow: hidden; margin-top: 4px; }
-.strip i { display: block; min-width: 3px; }
-.phrases { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
-.ph { display: grid; grid-template-columns: 6.6em 1fr; gap: 10px; align-items: start; }
-.ph time { direction: ltr; text-align: right; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; line-height: 2; white-space: nowrap; }
-.ph .n { font: 700 24px/1.2 var(--display); display: inline-flex; align-items: center; gap: 8px; }
-.ph .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
-.ph .on { font: 500 14px var(--body); color: var(--muted); }
-.ph .sh { display: block; font-size: 12.5px; color: var(--gold); margin-top: 2px; }
-.tg { display: inline-block; font: 600 12px/1.6 var(--body); border-radius: 999px; padding: 0 9px; margin-inline-start: 6px; vertical-align: middle; }
-.t-music { background: var(--gold-soft); color: var(--gold); }
-.t-voice { background: var(--accent); color: var(--accent-fg); }
-.t-unknown { background: var(--line); color: var(--muted); }
-.strip i.t-music { background: var(--gold); }
-.strip i.t-voice { background: var(--accent); }
-.strip i.t-unknown { background: var(--muted); opacity: .55; }
-.ph time small { display: block; line-height: 1.4; }
-.foot { font-size: 12.5px; color: var(--muted); margin: 0; }
-@media (prefers-reduced-motion: reduce) { .progress i { transition: none; } }
-@media (max-width: 360px) { .inputs { grid-template-columns: 1fr; } }
+.file { margin-top: auto; font-size: 14px; color: var(--muted); }
+.file label { color: var(--accent); text-decoration: underline; cursor: pointer; }
+.file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.tip { font-size: 13px; color: var(--muted); margin: 0; max-width: 34ch; }
 </style>
+</head>
+<body>
+<main>
+  <h1>كاشف المقام</h1>
+  <p class="sub">اضغط، غنِّ 20 ثانية، واضغط مرة ثانية</p>
 
-<div class="app" id="app" lang="ar" dir="rtl">
-  <header class="top">
-    <h1>كاشف المقام</h1>
-    <p>سجّل صوتك أو ارفع مقطعًا صوتيًا أو فيديو، ويقسّم المقطع إلى أقسام بتوقيتها: عزف، غناء، ولحن جديد.</p>
-  </header>
+  <button class="rec" id="rec" type="button" aria-label="سجّل">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+    <span id="recLabel">سجّل</span>
+  </button>
 
-  <section class="inputs" aria-label="مصدر الصوت">
-    <div class="btn primary" id="recBtn">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
-      <span>سجّل الآن</span>
-      <input class="cover" id="rec" type="file" accept="audio/*" capture aria-label="سجّل الآن">
-    </div>
-    <div class="btn" id="upBtn">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>
-      <span>ارفع ملفًا</span>
-      <input class="cover" id="up" type="file" accept="audio/*,video/*,.m4a,.mp3,.wav,.ogg,.aac,.flac,.mp4,.mov,.webm" aria-label="ارفع ملفًا">
-    </div>
-  </section>
-  <details class="alt-pick">
-    <summary>الأزرار لا تعمل؟ اختر الملف من هنا</summary>
-    <input id="plain" type="file" accept="audio/*,video/*">
-  </details>
-  <p class="hint">«سجّل الآن» يسجّل من المايك مباشرة، واضغط مرة ثانية للإيقاف. الأدق: صوت أو آلة واحدة لمدة 20 ثانية أو أكثر.</p>
+  <div class="status" id="status" aria-live="polite"></div>
+  <section id="out" aria-live="polite"></section>
 
-  <div class="demo">
-    <label for="demoSel">جرّب نموذجًا صناعيًا:</label>
-    <select id="demoSel"></select>
-    <button class="small" id="demoBtn" type="button">حلّل</button>
-  </div>
-
-  <section id="result" aria-live="polite"></section>
-
-  <p class="foot">النتيجة تقدير مبني على تحليل الدرجات الصوتية وليست حكمًا نهائيًا. الأغاني ذات الآلات الكثيرة تقلّ دقتها عن الغناء أو العزف المنفرد.</p>
-</div>
+  <p class="tip">الأدق: صوتك لوحده، قريب من الموبايل، بدون موسيقى في الخلفية.</p>
+  <p class="file">أو <label for="file">اختر ملفًا صوتيًا</label><input id="file" type="file" accept="audio/*,video/*"></p>
+</main>
 
 <script>
 'use strict';
@@ -851,7 +757,12 @@ async function buildSections(x, sr, res, top) {
       vec = new Float64Array(24);
       for (let k = a; k < b; k++) vec[unitRel(cents[S[k]])] += 1 / (b - a);
     }
-    return { start, end, type, maqam, tonicCents, score, key, vec, a, b };
+    let fvec = null;
+    if (b - a >= 30) {
+      const fa = Math.max(a, b - finalN); fvec = new Float64Array(24);
+      for (let k = fa; k < b; k++) fvec[unitRel(cents[S[k]])] += 1 / (b - fa);
+    }
+    return { start, end, type, maqam, tonicCents, score, key, vec, fvec, a, b };
   };
 
   let edges = [first].concat(kept.map((c) => c.t), [lastT]);
@@ -881,45 +792,118 @@ async function buildSections(x, sr, res, top) {
     }
     if (!did) break;
   }
-  // group phrases whose notes match (longest first), then name every group once from all of its notes together
-  const order = segs.map((sg, i) => i).filter((i) => segs[i].vec).sort((x, y) => lenOf(segs[y]) - lenOf(segs[x]));
-  const groups = [];
-  order.forEach((i) => {
-    let best = null, bs = lenOf(segs[i]) < 20 ? 0.85 : 0.92;
-    groups.forEach((g) => { const c = cosine(g.vec, segs[i].vec); if (c >= bs) { bs = c; best = g; } });
-    if (best) {
-      const w = lenOf(segs[i]), tw = best.w + w;
-      for (let k = 0; k < 24; k++) best.vec[k] = (best.vec[k] * best.w + segs[i].vec[k] * w) / tw;
-      best.w = tw; best.members.push(i);
-    } else groups.push({ vec: Float64Array.from(segs[i].vec), w: lenOf(segs[i]), members: [i] });
+  // ---- name each phrase the way a musician would: keep the piece's tonic, then read the notes that decide the maqam ----
+  // vec[u] = share of notes u quarter-tones above the piece's tonic (anchor = top.tonicCents)
+  const deciding = (vec) => {
+    const pick = (opts) => {
+      const ms = opts.map((u) => vec[u % 24]);
+      let bi = 0; for (let i = 1; i < ms.length; i++) if (ms[i] > ms[bi]) bi = i;
+      const sorted = ms.slice().sort((p, q) => q - p);
+      return { u: opts[bi], mass: ms[bi], second: sorted[1] || 0, alt: opts[ms.indexOf(sorted[1])] };
+    };
+    const d3 = pick([6, 7, 8]);
+    return { d2: pick([2, 3, 4]), d3, d4: pick(d3.u === 8 ? [10, 12] : [8, 10, 12]) };
+  };
+  const templateAt = (vec, m) => {
+    // how well a maqam on the piece's tonic explains these notes: notes it uses minus notes it does not
+    let inside = 0, pres = 0;
+    const set = new Set(m.deg);
+    m.deg.forEach((d) => { inside += vec[d % 24]; pres += Math.min(1, vec[d % 24] / 0.02); });
+    // small amounts outside the scale are usually overtones of strong notes or passing slides, not part of the maqam
+    let outside = 0; for (let u = 0; u < 24; u++) if (!set.has(u)) outside += Math.max(0, vec[u] - 0.025);
+    return inside - 1.5 * outside + 0.15 * (pres / m.deg.length);
+  };
+  const nameAtTonic = (vec) => {
+    const d = deciding(vec);
+    const ok2 = d.d2.mass >= 0.015, ok3 = d.d3.mass >= 0.015, ok4 = d.d4.mass >= 0.03 && d.d4.mass >= 1.5 * d.d4.second;
+    let cands = MAQAMAT.filter((m) => (!ok2 || m.deg[1] === d.d2.u) && (!ok3 || m.deg[2] === d.d3.u) && (!ok4 || m.deg[3] === d.d4.u));
+    if (!cands.length) cands = MAQAMAT.filter((m) => (!ok2 || m.deg[1] === d.d2.u) && (!ok3 || m.deg[2] === d.d3.u));
+    if (!cands.length) cands = MAQAMAT.slice();
+    cands.sort((p, q) => templateAt(vec, q) - templateAt(vec, p));
+    const chosen = cands[0];
+    // the deciding note is a near tie: say which other maqam it could be
+    let alt = null;
+    if (ok2 && d.d2.second >= 0.6 * d.d2.mass && d.d2.second >= 0.012) {
+      const other = MAQAMAT.filter((m) => m.deg[1] === d.d2.alt && m.deg[2] === chosen.deg[2]).sort((p, q) => templateAt(vec, q) - templateAt(vec, p))[0];
+      if (other && other.id !== chosen.id) alt = other;
+    }
+    return { maqam: chosen, fit: templateAt(vec, chosen), alt, unsure: !ok2 || !ok3 };
+  };
+  const shiftVec = (vec, k) => { const o = new Float64Array(24); for (let u = 0; u < 24; u++) o[u] = vec[(u + k) % 24]; return o; };
+  const chooseTonic = (vec, fvec, kHome) => {
+    const opts = [];
+    for (let k = 0; k < 24; k++) {
+      if (vec[k] < 0.06) continue;
+      const n = nameAtTonic(shiftVec(vec, k));
+      opts.push({ k, n, fit: n.fit - (n.unsure ? 0.1 : 0) });
+    }
+    if (!opts.length) return null;
+    const bestFit = Math.max.apply(null, opts.map((o) => o.fit));
+    // same notes can be read from several tonics (nahawand on C = kurd on G): pick the note the music leans on and ends on
+    const near = opts.filter((o) => o.fit >= bestFit - 0.04);
+    near.forEach((o) => { o.sal = vec[o.k] + 0.6 * (fvec ? fvec[o.k] : 0) + (o.k === kHome ? 0.06 : 0) + 2 * (o.fit - bestFit); });
+    near.sort((p, q) => q.sal - p.sal);
+    return near[0];
+  };
+  // the piece's own tonic, from all of its notes
+  const whole = describe(segs[0].start, segs[segs.length - 1].end);
+  const homeChoice = whole.vec ? chooseTonic(whole.vec, whole.fvec, -1) : null;
+  const kHome = homeChoice ? homeChoice.k : 0;
+  if (typeof process !== 'undefined' && process.env.DEBUG_SECTIONS) console.log('kHome', kHome, 'anchor', anchor.toFixed(0), homeChoice && homeChoice.n.maqam.id);
+  const nameSection = (sg) => {
+    if (!sg.vec) return null;
+    const v = sg.vec, f = sg.fvec || new Float64Array(24);
+    const homeN = nameAtTonic(shiftVec(v, kHome));
+    let pickK = kHome, pickN = homeN;
+    if (!homeN.unsure) {
+      // move to another tonic only when it explains the notes clearly better,
+      // or explains them as well and the melody clearly rests on it
+      const homeSal = v[kHome] + f[kHome];
+      let bestScore = 0;
+      for (let k = 0; k < 24; k++) {
+        if (k === kHome || v[k] < 0.06) continue;
+        const n = nameAtTonic(shiftVec(v, k));
+        if (n.unsure) continue;
+        const sal = v[k] + f[k];
+        const better = n.fit > homeN.fit + 0.04 || (n.fit >= homeN.fit - 0.01 && sal > homeSal + 0.05);
+        if (!better) continue;
+        const sc = (n.fit - homeN.fit) + (sal - homeSal);
+        if (sc > bestScore) { bestScore = sc; pickK = k; pickN = n; }
+      }
+    }
+    const tonicCents = anchor + pickK * 50;
+    if (typeof process !== 'undefined' && process.env.DEBUG_SECTIONS) console.log('sec', sg.start.toFixed(0), 'home', homeN.maqam.id, homeN.unsure ? 'UNSURE' : '', homeN.fit.toFixed(3), '-> k', pickK, pickN.maqam.id, pickN.fit.toFixed(3), 'vec[home]', v[kHome].toFixed(2));
+    return { maqam: pickN.maqam, tonicCents, score: Math.max(0, pickN.fit), alt: pickN.alt ? { maqam: pickN.alt, tonicCents } : null, unsure: pickN.unsure };
+  };
+  segs.forEach((sg) => {
+    const nm = nameSection(sg);
+    if (nm) { sg.maqam = nm.maqam; sg.tonicCents = nm.tonicCents; sg.score = nm.score; sg.alt = nm.alt; sg.unsure = nm.unsure; }
+    else { sg.maqam = null; }
   });
-  groups.forEach((g) => {
-    const H = new Float64Array(BINS); let n = 0;
-    g.members.forEach((i) => { for (let k = segs[i].a; k < segs[i].b; k++) { H[Math.floor((((cents[S[k]] % 1200) + 1200) % 1200) / 10) % BINS] += 1; n++; } });
-    for (let q = 0; q < BINS; q++) H[q] /= n || 1;
-    const longest = segs[g.members[0]];
-    const r = rank({ H, Hfinal: histOf(cents, S, longest.a, longest.b, finalN).Hfinal });
-    g.name = { maqam: r[0].maqam, tonicCents: r[0].tonicCents, score: r[0].score };
-    const close = r.slice(1).find((x) => r[0].score - x.score < 0.04);
-    g.alt = close ? close.maqam : null;
-  });
-  groups.forEach((g) => g.members.forEach((i) => { Object.assign(segs[i], g.name, { alt: g.alt, group: groups.indexOf(g) }); }));
+  // a phrase too thin to decide (the deciding notes are missing) takes its neighbour's name
+  for (let i = 0; i < segs.length; i++) {
+    if (!segs[i].unsure) continue;
+    const nb = [segs[i - 1], segs[i + 1]].filter((x) => x && x.maqam && !x.unsure).sort((p, q) => lenOf(q) - lenOf(p))[0];
+    if (nb && centsDist(nb.tonicCents, segs[i].tonicCents) < 35) { segs[i].maqam = nb.maqam; segs[i].alt = nb.alt; segs[i].score = nb.score; }
+  }
+  const groupKey = (sg) => sg.maqam ? sg.maqam.id + '@' + Math.round(sg.tonicCents / 50) + (sg.alt ? '|' + sg.alt.maqam.id : '') : '';
+  segs.forEach((sg) => { sg.group = groupKey(sg); });
   // after naming, neighbours that ended up with the same name and kind are one phrase
   for (let guard = 0; guard < 100; guard++) {
     let did = false;
     for (let i = 0; i + 1 < segs.length; i++) {
       const p = segs[i], q = segs[i + 1];
-      if (res.mode !== 'poly' && p.maqam && q.maqam && p.type === q.type && p.maqam.id === q.maqam.id && centsDist(p.tonicCents, q.tonicCents) < 35) { segs.splice(i, 2, Object.assign({}, lenOf(p) >= lenOf(q) ? p : q, { start: p.start, end: q.end })); did = true; break; }
+      if (p.maqam && q.maqam && p.type === q.type && p.group === q.group) { segs.splice(i, 2, Object.assign({}, lenOf(p) >= lenOf(q) ? p : q, { start: p.start, end: q.end })); did = true; break; }
     }
     if (!did) break;
   }
-  const cover = {};
-  segs.forEach((sg) => { if (sg.maqam) cover[sg.group] = (cover[sg.group] || 0) + lenOf(sg); });
+  const cover = {}, rep = {};
+  segs.forEach((sg) => { if (sg.maqam) { cover[sg.group] = (cover[sg.group] || 0) + lenOf(sg); if (!rep[sg.group] || lenOf(sg) > lenOf(rep[sg.group])) rep[sg.group] = sg; } });
   let dom = null;
   Object.keys(cover).forEach((k) => { if (dom === null || cover[k] > cover[dom]) dom = k; });
-  const out = segs.map((sg) => ({ start: sg.start, end: sg.end, type: sg.type, maqam: sg.maqam || null, tonicCents: sg.tonicCents == null ? null : sg.tonicCents, score: sg.score == null ? null : sg.score, alt: sg.alt || null, group: sg.maqam ? sg.group : -1 }));
-  const dg = dom === null ? null : groups[Number(dom)];
-  out.dominant = dg ? { maqam: dg.name.maqam, tonicCents: dg.name.tonicCents, score: dg.name.score, alt: dg.alt } : null;
+  const out = segs.map((sg) => ({ start: sg.start, end: sg.end, type: sg.type, maqam: sg.maqam || null, tonicCents: sg.maqam ? sg.tonicCents : null, score: sg.maqam ? sg.score : null, alt: sg.alt || null, group: sg.group || '' }));
+  const dg = dom === null ? null : rep[dom];
+  out.dominant = dg ? { maqam: dg.maqam, tonicCents: dg.tonicCents, score: dg.score, alt: dg.alt } : null;
   return out;
 }
 
@@ -987,341 +971,128 @@ if (typeof module !== 'undefined') {
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
-  var resultEl = $('result');
-  var busy = false;
-  var audioCtx = null;
+  var btn = $('rec'), lab = $('recLabel'), statusEl = $('status'), out = $('out');
+  var AC = window.AudioContext || window.webkitAudioContext;
+  var cap = null, busy = false, last = null, player = null;
 
-  // ---- demo select ----
-  var DEMO_TONICS = [146.83, 130.81, 164.81, 174.61, 196.0];
-  var sel = $('demoSel');
-  MAQAMAT.forEach(function (m, i) {
-    var o = document.createElement('option');
-    o.value = String(i); o.textContent = m.ar;
-    sel.appendChild(o);
-  });
-  var mixOpt = document.createElement('option');
-  mixOpt.value = 'mix'; mixOpt.textContent = 'عزف ثم غناء ثم عزف (بياتي ← حجاز ← راست)';
-  sel.insertBefore(mixOpt, sel.firstChild);
-  sel.value = 'mix';
-
-  var job = 0;
-  function withSections(res, data, sr) {
-    return buildSections(data, sr, res, rank(res)[0]).then(function (secs) { res.sections = secs; return res; }, function () { res.sections = []; return res; });
-  }
-  function setBusy(b) { busy = b; }
-
-  function showProgress(label) {
-    resultEl.innerHTML = '<div class="card"><p class="busy" id="busyTxt"></p><div class="progress"><i id="progBar"></i></div></div>';
-    $('busyTxt').textContent = label;
-  }
-  function onProgress(p) {
-    var bar = $('progBar'); if (bar) bar.style.width = Math.round(p * 100) + '%';
-  }
-  function showError(msg) {
-    resultEl.innerHTML = '<p class="err"></p>';
-    resultEl.firstChild.textContent = msg;
-  }
-
-  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-
-  // ---- chart ----
-  function chartSVG(res, top) {
-    var H = res.H, t = top.t, m = top.maqam;
-    var sm = new Float64Array(BINS), K = 4;
-    for (var i = 0; i < BINS; i++) {
-      var s = 0, w = 0;
-      for (var k = -K; k <= K; k++) { var g = Math.exp(-(k * k) / (2 * 1.3 * 1.3)); s += g * H[(i + k + BINS) % BINS]; w += g; }
-      sm[i] = s / w;
-    }
-    var mx = 0; for (i = 0; i < BINS; i++) if (sm[i] > mx) mx = sm[i];
-    var X0 = 8, PW = 344, base = 104, ph = 92, bw = PW / BINS;
-    var d = 'M' + X0 + ' ' + base;
-    for (var j = 0; j < BINS; j++) {
-      var v = sm[(t - 5 + j + 2 * BINS) % BINS] / (mx || 1);
-      d += ' L' + (X0 + (j + 0.5) * bw).toFixed(1) + ' ' + (base - v * ph).toFixed(1);
-    }
-    d += ' L' + (X0 + PW) + ' ' + base + ' Z';
-    var out = '<svg viewBox="0 0 360 132" role="img" aria-label="توزيع النغمات المسموعة بالنسبة إلى القرار">';
-    out += '<line class="base" x1="' + X0 + '" y1="' + base + '" x2="' + (X0 + PW) + '" y2="' + base + '"/>';
-    out += '<path class="area" d="' + d + '"/>';
-    var cum = 0;
-    m.deg.forEach(function (u) {
-      var x = X0 + (5 + 5 * u + 0.5) * bw;
-      out += '<line class="tick" x1="' + x.toFixed(1) + '" y1="8" x2="' + x.toFixed(1) + '" y2="' + base + '"/>';
-      out += '<text class="' + (u === 0 ? 'ton' : '') + '" x="' + x.toFixed(1) + '" y="121">' + fracTone(u) + '</text>';
-    });
-    return out + '</svg>';
-  }
-
-  // ---- render result ----
-  function levelOf(r) {
-    var gap = r[0].score - r[1].score;
-    if (r[0].score < 0.55) return { k: 'close', t: 'غير حاسم', note: 'الصوت لا يطابق أي مقام بوضوح. جرّب مقطعًا أطول أو أنقى.' };
-    if (gap < 0.04) return { k: 'close', t: 'غير حاسم', note: 'قريب أيضًا من ' + r[1].maqam.ar + '.' };
-    if (gap < 0.1) return { k: 'mid', t: 'محتمل', note: 'يقترب منه ' + r[1].maqam.ar + '.' };
-    return { k: 'high', t: 'واضح', note: '' };
-  }
-
-  var lastTop = null;
   function fmt(s) { var m = Math.floor(s / 60), x = Math.floor(s % 60); return (m < 10 ? '0' : '') + m + ':' + (x < 10 ? '0' : '') + x; }
-  function hueOf(m) { return (MAQAMAT.indexOf(m) * 29 + 215) % 360; }
-  var TYPE_AR = { music: 'موسيقى', voice: 'غناء', unknown: '' };
-  function timelineHTML(segs, mode) {
-    if (!segs.length) return '';
-    var total = segs[segs.length - 1].end - segs[0].start || 1;
-    var strip = segs.map(function (g) {
-      return '<i class="t-' + g.type + '" style="flex:' + ((g.end - g.start) / total).toFixed(4) + '"></i>';
-    }).join('');
-    var rows = segs.map(function (g) {
-      var nn = g.maqam ? noteFromCents(g.tonicCents).name : '';
-      var name = g.maqam ? esc(g.maqam.ar) : 'غير محدد';
-      var chip = g.type === 'unknown' ? '' : '<span class="tg t-' + g.type + '">' + TYPE_AR[g.type] + '</span>';
-      return '<li class="ph"><time>' + fmt(g.start) + ' ← ' + fmt(g.end) + '<small>' + Math.round(g.end - g.start) + ' ثانية</small></time><div><span class="n">' + name + '</span>' +
-        (nn ? ' <span class="on">على ' + esc(nn) + '</span>' : '') + (g.alt ? ' <span class="on">أو ' + esc(g.alt.ar) + '</span>' : '') + chip + '</div></li>';
-    }).join('');
-    var anyType = segs.some(function (g) { return g.type !== 'unknown'; });
-    var cap = 'عدد الأقسام: ' + segs.length + '. أقصر قسم نحو 8 ثوانٍ، والتوقيتات تقريبية بفارق بضع ثوانٍ. ' +
-      (anyType ? 'تمييز الغناء من العزف تقدير مبني على اهتزاز الصوت، وهو أدق مع صوت أو آلة منفردة.' : 'في الأغاني بآلات كثيرة لا أستطيع التمييز بين الغناء والعزف، فالأقسام مبنية على تغيّر الصوت واللحن فقط.');
-    return '<h2>الأقسام بالتوقيت</h2><div class="strip" role="img" aria-label="شريط زمني للأقسام">' + strip + '</div><ol class="phrases">' + rows + '</ol><p class="cap">' + cap + '</p>';
+  function setStatus(html) { statusEl.innerHTML = html; }
+  function error(msg) { out.innerHTML = '<p class="err"></p>'; out.firstChild.textContent = msg; }
+
+  function show(r) {
+    last = r;
+    out.innerHTML = '<div class="result"><p class="label">المقام</p><div class="name" id="nm"></div><p class="tonic" id="tn"></p>' +
+      (r.also ? '<p class="also" id="al"></p>' : '') + '<button class="small" id="play" type="button">▶ اسمع سلّم المقام</button></div>';
+    $('nm').textContent = r.maqam.ar;
+    $('tn').textContent = 'القرار: ' + noteFromCents(r.tonicCents).name;
+    if (r.also) $('al').textContent = 'وقريب أيضًا من ' + r.also;
+    $('play').addEventListener('click', playScale);
   }
 
-  function render(res, label, isDemo) {
-    var r = rank(res), top = r[0];
-    var dm = res.sections && res.sections.dominant;
-    if (dm) {
-      // the headline is the name that covers most of the clip, so it always agrees with the sections below
-      var ent = r.filter(function (x) { return x.maqam.id === dm.maqam.id; })[0] || r[0];
-      var tb = Math.floor((((dm.tonicCents % 1200) + 1200) % 1200) / 10) % BINS;
-      top = Object.assign({}, ent, { maqam: dm.maqam, tonicCents: dm.tonicCents, score: dm.score, t: tb });
-      r = [top].concat(r.filter(function (x) { return x.maqam.id !== dm.maqam.id; }));
-    }
-    var lv = levelOf(r);
-    if (dm && dm.alt) lv = { k: 'close', t: 'غير حاسم', note: 'قريب أيضًا من ' + dm.alt.ar + '.' };
-    var segs = res.sections || [];
-    lastTop = top;
-    var nn = noteFromCents(top.tonicCents);
-    var dev = Math.round(nn.dev);
-    var steps = stepsOf(top.maqam.deg).map(function (s) { return '<b>' + s + '</b>'; }).join(' · ');
-    var pct = function (x) { return Math.max(1, Math.min(100, Math.round(100 * x.score / 1.15))); };
-    var html = '<article class="card">' +
-      '<div class="meta"><span class="chip" id="srcChip"></span><span>' + Math.round(res.stats.seconds) + ' ثانية</span></div>' +
-      '<div class="name" id="maqamName"></div>' +
-      '<p class="tonic">القرار: ' + esc(nn.name) + ' <small>(الضبط ' + (dev >= 0 ? '+' : '−') + Math.abs(dev) + ' سنت عن 440)</small></p>' +
-      '<p class="steps">' + steps + '</p>' +
-      '<div class="verdict"><span class="badge ' + lv.k + '">' + lv.t + '</span><span class="note">' + esc((res.mode === 'poly' ? 'مقطع بآلات متعددة، فالتحليل أقل دقة. ' : '') + (segs.length > 1 ? 'المقطع مقسّم إلى ' + segs.length + ' أقسام، وهذا الأقرب للمجموع. ' : '') + lv.note) + '</span></div>' +
-      '<div class="row-actions"><button class="small" id="playBtn" type="button">▶ اسمع سلّم المقام</button></div>' +
-      timelineHTML(segs, res.mode) +
-      '<h2>أقرب المقامات</h2><ul class="alts">' +
-      r.slice(0, 3).map(function (x, i) {
-        return '<li class="alt' + (i === 0 ? ' first' : '') + '"><span class="n">' + esc(x.maqam.ar) + '</span><div class="bar"><i style="width:' + pct(x) + '%"></i></div><span class="p">' + pct(x) + '%</span></li>';
-      }).join('') + '</ul>' +
-      '<h2>بصمة النغمات</h2><div class="chart">' + chartSVG(res, top) + '</div>' +
-      '<p class="cap">الخطوط الذهبية هي درجات المقام، والأرقام هي البُعد عن القرار بالتون (التون = 200 سنت).</p>' +
-      '</article>';
-    resultEl.innerHTML = html;
-    $('maqamName').textContent = top.maqam.ar;
-    $('srcChip').textContent = (isDemo ? 'نموذج صناعي · ' : '') + label;
-    $('playBtn').addEventListener('click', playScale);
-  }
-
-  // ---- play the detected scale ----
   function playScale() {
-    if (!lastTop) return;
-    var btn = $('playBtn');
-    try {
-      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.resume) audioCtx.resume();
-    } catch (e) { btn.textContent = 'الصوت غير متاح هنا'; btn.disabled = true; return; }
-    var f = 440 * Math.pow(2, lastTop.tonicCents / 1200);
-    while (f < 150) f *= 2;
-    while (f > 300) f /= 2;
-    var degs = lastTop.maqam.deg.concat([24]);
-    var t0 = audioCtx.currentTime + 0.05, step = 0.5;
+    if (!last || !AC) return;
+    try { player = player || new AC(); if (player.resume) player.resume(); } catch (e) { return; }
+    var f = 440 * Math.pow(2, last.tonicCents / 1200);
+    while (f < 150) f *= 2; while (f > 300) f /= 2;
+    var degs = last.maqam.deg.concat([24]), t0 = player.currentTime + 0.05, st = 0.45;
     degs.forEach(function (u, i) {
-      var o = audioCtx.createOscillator(), g = audioCtx.createGain();
-      o.type = 'triangle';
-      o.frequency.value = f * Math.pow(2, (u * 50) / 1200);
-      var s = t0 + i * step;
-      g.gain.setValueAtTime(0, s);
-      g.gain.linearRampToValueAtTime(0.28, s + 0.03);
-      g.gain.exponentialRampToValueAtTime(0.001, s + step * 0.95);
-      o.connect(g); g.connect(audioCtx.destination);
-      o.start(s); o.stop(s + step);
+      var o = player.createOscillator(), g = player.createGain(), s = t0 + i * st;
+      o.type = 'triangle'; o.frequency.value = f * Math.pow(2, u * 50 / 1200);
+      g.gain.setValueAtTime(0, s); g.gain.linearRampToValueAtTime(0.28, s + 0.03); g.gain.exponentialRampToValueAtTime(0.001, s + st * 0.95);
+      o.connect(g); g.connect(player.destination); o.start(s); o.stop(s + st);
     });
-    btn.disabled = true;
-    var old = btn.textContent; btn.textContent = 'جارٍ التشغيل…';
-    setTimeout(function () { btn.disabled = false; btn.textContent = old; }, degs.length * step * 1000 + 100);
   }
 
-  // ---- demo ----
-  function mixSignal() {
-    var parts = [[1, 146.83, { vib: 0, glide: 0.03 }], [2, 146.83, { vib: 38, glide: 0.07, vrate: 6, noise: 0.01 }], [0, 130.81, { vib: 0, glide: 0.03 }]];
-    var chunks = parts.map(function (q, i) { return synthMelody(MAQAMAT[q[0]].deg, q[1], 16000, 600 + i, q[2]); });
-    var n = 0; chunks.forEach(function (c) { n += c.length; });
-    var x = new Float32Array(n), pos = 0;
-    chunks.forEach(function (c) { x.set(c, pos); pos += c.length; });
-    return x;
+  // one answer for the whole recording: the maqam that covers most of it, on a steady tonic
+  function decide(data, sr) {
+    return analyzeAuto(data, sr, function (p) { setStatus('نحلّل… ' + Math.round(p * 100) + '%'); }).then(function (res) {
+      var top = rank(res)[0];
+      return buildSections(data, sr, res, top).then(function (secs) {
+        var d = secs && secs.dominant;
+        if (d && d.maqam) return { maqam: d.maqam, tonicCents: d.tonicCents, also: d.alt ? d.alt.maqam.ar : null };
+        return { maqam: top.maqam, tonicCents: top.tonicCents, also: null };
+      }, function () { return { maqam: top.maqam, tonicCents: top.tonicCents, also: null }; });
+    });
   }
-  function runDemo(which) {
-    var my = ++job;
-    var isMix = which === 'mix', idx = isMix ? 0 : parseInt(which, 10);
-    var m = MAQAMAT[idx], f0 = DEMO_TONICS[idx % DEMO_TONICS.length];
-    setBusy(true);
-    showProgress(isMix ? 'نولّد مقطعًا بثلاثة أقسام ونحلّله…' : 'نولّد نموذجًا بمقام ' + m.ar + ' ونحلّله…');
-    setTimeout(function () {
-      var x = isMix ? mixSignal() : synthMelody(m.deg, f0, 16000, 500 + idx);
-      analyze(x, 16000, function (p) { if (my === job) onProgress(p * 0.8); }).then(function (res) { return withSections(res, x, 16000); }).then(function (res) {
-        if (my !== job) return;
-        render(res, isMix ? 'عزف ← غناء ← عزف (مولَّد)' : 'مقام ' + m.ar + ' (مولَّد)', true);
-      }).catch(function () { if (my === job) showError('تعذّر تحليل النموذج.'); }).then(function () { if (my === job) setBusy(false); });
-    }, 30);
-  }
-  $('demoBtn').addEventListener('click', function () { runDemo(sel.value); });
 
-  // ---- file / recording ----
-  function toMono(audio) {
-    var sr = audio.sampleRate, ch = audio.numberOfChannels;
-    var len = Math.min(audio.length, Math.floor(360 * sr));
-    var out = new Float32Array(len);
-    for (var c = 0; c < ch; c++) {
-      var d = audio.getChannelData(c);
-      for (var i = 0; i < len; i++) out[i] += d[i] / ch;
+  function run(data, sr) {
+    busy = true; btn.disabled = true; out.innerHTML = '';
+    setStatus('نحلّل…');
+    decide(data, sr).then(function (r) { setStatus(''); show(r); }).catch(function (e) {
+      setStatus('');
+      if (e && e.message === 'no_pitch') error('لم أسمع نغمات واضحة. غنِّ أقرب للموبايل وبصوت أعلى، 20 ثانية على الأقل.');
+      else if (e && e.message === 'too_short') error('التسجيل قصير. غنِّ 15 ثانية على الأقل.');
+      else error('حدث خطأ أثناء التحليل. جرّب مرة ثانية.');
+    }).then(function () { busy = false; btn.disabled = false; lab.textContent = 'سجّل'; });
+  }
+
+  function stop() {
+    var c = cap; cap = null;
+    clearInterval(c.timer);
+    try { c.proc.disconnect(); c.src.disconnect(); } catch (e) {}
+    c.stream.getTracks().forEach(function (t) { t.stop(); });
+    var sr = c.ctx.sampleRate; try { c.ctx.close(); } catch (e) {}
+    btn.classList.remove('on'); lab.textContent = 'سجّل';
+    var n = 0; c.bufs.forEach(function (b) { n += b.length; });
+    if (n < sr * 8) { setStatus(''); error('التسجيل قصير. غنِّ 15 ثانية على الأقل.'); return; }
+    if (c.peak < 0.01) { setStatus(''); error('التسجيل صامت تقريبًا. تأكد إن المايك شغال وغنِّ أقرب للموبايل.'); return; }
+    var data = new Float32Array(n), pos = 0;
+    c.bufs.forEach(function (b) { data.set(b, pos); pos += b.length; });
+    run(data, sr);
+  }
+
+  function start() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !AC) {
+      error('المتصفح ده مش بيسمح بالمايك. افتح التطبيق من Chrome، أو اختر ملفًا صوتيًا من تحت.');
+      return;
     }
-    return { data: out, sr: sr, capped: audio.length > len };
-  }
-
-  function readBuf(file) {
-    if (file.arrayBuffer) return file.arrayBuffer();
-    return new Promise(function (ok, bad) {
-      var fr = new FileReader();
-      fr.onload = function () { ok(fr.result); };
-      fr.onerror = function () { bad(fr.error); };
-      fr.readAsArrayBuffer(file);
+    out.innerHTML = '';
+    navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }).then(function (stream) {
+      var ctx = new AC(); if (ctx.resume) ctx.resume();
+      var src = ctx.createMediaStreamSource(stream), proc = ctx.createScriptProcessor(4096, 1, 1), mute = ctx.createGain();
+      mute.gain.value = 0;
+      var c = { ctx: ctx, src: src, proc: proc, stream: stream, bufs: [], peak: 0, level: 0, timer: null, t0: Date.now() };
+      proc.onaudioprocess = function (e) {
+        var d = e.inputBuffer.getChannelData(0), m = 0;
+        for (var i = 0; i < d.length; i++) { var v = d[i] < 0 ? -d[i] : d[i]; if (v > m) m = v; }
+        c.bufs.push(new Float32Array(d)); c.level = m; if (m > c.peak) c.peak = m;
+      };
+      src.connect(proc); proc.connect(mute); mute.connect(ctx.destination);
+      cap = c;
+      btn.classList.add('on'); lab.textContent = 'إيقاف';
+      setStatus('<span class="time" id="tm">00:00</span><span class="meter"><i id="lv"></i></span><span id="hint">جاري التسجيل…</span>');
+      c.timer = setInterval(function () {
+        var s = (Date.now() - c.t0) / 1000;
+        $('tm').textContent = fmt(s);
+        $('lv').style.width = Math.min(100, Math.round(c.level * 300)) + '%';
+        $('hint').textContent = c.level < 0.01 ? 'الصوت ضعيف، قرّب الموبايل' : (s < 15 ? 'كمّل غُنا…' : 'تمام، اضغط إيقاف لما تخلص');
+        if (s >= 90) stop();
+      }, 200);
+    }).catch(function () {
+      error('محتاج إذن المايك. من قائمة Chrome ⋮ ← الإعدادات ← إعدادات المواقع ← الميكروفون، اسمح للموقع وجرّب تاني.');
     });
   }
 
-  function explain(e) {
-    var msg = e && e.message;
-    if (msg === 'no_pitch') return 'لم أجد نغمات واضحة. اقترب من المايك، وقلّل الضجيج، وغنِّ أو اعزف 20 ثانية على الأقل.';
-    if (msg === 'too_short') return 'المقطع قصير جدًا. سجّل 10 ثوانٍ على الأقل.';
-    return 'تعذّر قراءة هذا الملف. جرّب صيغة أخرى مثل m4a أو mp3 أو wav.' + (msg ? ' [' + msg + ']' : '');
-  }
+  btn.addEventListener('click', function () { if (busy) return; if (cap) stop(); else start(); });
 
-  function handleSamples(data, sr, label) {
-    var my = ++job;
-    setBusy(true);
-    showProgress('نحلّل التسجيل…');
-    analyzeAuto(data, sr, function (p) { if (my === job) onProgress(p * 0.8); }).then(function (res) { return withSections(res, data, sr); }).then(function (res) {
-      if (my !== job) return;
-      render(res, label, false);
-    }).catch(function (e) {
-      if (my === job) showError(explain(e));
-    }).then(function () { if (my === job) setBusy(false); });
-  }
-
-  function handleFile(file) {
-    if (!file) return;
-    var my = ++job;
-    setBusy(true);
-    showProgress('وصل الملف «' + (file.name || 'تسجيل') + '». نفكّ ترميزه…');
-    readBuf(file).then(function (buf) {
-      var Ctx = window.AudioContext || window.webkitAudioContext;
-      var ac = new Ctx();
-      return new Promise(function (ok, bad) { ac.decodeAudioData(buf, ok, bad); }).then(function (a) {
-        if (ac.close) ac.close();
-        return a;
-      });
-    }).then(function (audio) {
-      var mono = toMono(audio);
-      if (my !== job) throw new Error('stale');
-      showProgress(mono.capped ? 'نحلّل أول 6 دقائق من المقطع…' : 'نحلّل النغمات…');
-      return analyzeAuto(mono.data, mono.sr, function (p) { if (my === job) onProgress(p * 0.8); }).then(function (res) { return withSections(res, mono.data, mono.sr); });
-    }).then(function (res) {
-      if (my !== job) return;
-      render(res, file.name || 'تسجيل', false);
-    }).catch(function (e) {
-      if (my !== job) return;
-      showError(explain(e));
-    }).then(function () { if (my === job) setBusy(false); });
-  }
-  ['rec', 'up', 'plain'].forEach(function (id) {
-    $(id).addEventListener('change', function (e) {
-      var f = e.target.files && e.target.files[0];
-      handleFile(f);
-    });
+  $('file').addEventListener('change', function (e) {
+    var f = e.target.files && e.target.files[0]; e.target.value = '';
+    if (!f || busy || !AC) return;
+    busy = true; btn.disabled = true; out.innerHTML = ''; setStatus('نقرأ الملف…');
+    f.arrayBuffer().then(function (buf) {
+      var ac = new AC();
+      return new Promise(function (ok, bad) { ac.decodeAudioData(buf, ok, bad); }).then(function (a) { try { ac.close(); } catch (x) {} return a; });
+    }).then(function (a) {
+      var len = Math.min(a.length, Math.floor(360 * a.sampleRate)), d = new Float32Array(len);
+      for (var ch = 0; ch < a.numberOfChannels; ch++) { var s = a.getChannelData(ch); for (var i = 0; i < len; i++) d[i] += s[i] / a.numberOfChannels; }
+      busy = false; run(d, a.sampleRate);
+    }).catch(function () { busy = false; btn.disabled = false; setStatus(''); error('مش قادر أقرا الملف ده. جرّب mp3 أو m4a أو wav.'); });
   });
 
-  ['dragover', 'drop'].forEach(function (t) {
-    document.addEventListener(t, function (e) {
-      if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
-      e.preventDefault();
-      if (t === 'drop') handleFile(e.dataTransfer.files[0]);
-    });
-  });
-
-  // ---- live microphone (only in the installable build; the embedded artifact cannot open the mic) ----
-  var STANDALONE = true;
-  function setupRecorder() {
-    if (typeof navigator === 'undefined' || !window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
-    var AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
-    var btn = $('recBtn'), input = $('rec'), label = btn.querySelector('span');
-    input.style.display = 'none';
-    var cap = null;
-    function finish() {
-      var c = cap; cap = null;
-      clearInterval(c.timer);
-      try { c.proc.disconnect(); c.src.disconnect(); } catch (e) {}
-      c.stream.getTracks().forEach(function (t) { t.stop(); });
-      var sr = c.ctx.sampleRate;
-      try { c.ctx.close(); } catch (e) {}
-      label.textContent = 'سجّل الآن'; btn.classList.remove('recording'); btn.classList.add('primary');
-      var n = 0; c.bufs.forEach(function (b) { n += b.length; });
-      if (n < sr * 6) { showError('التسجيل قصير جدًا. سجّل 10 ثوانٍ على الأقل.'); return; }
-      if (c.peak < 0.01) { showError('التسجيل صامت تقريبًا. تأكد أن المايك يعمل وأن الصوت قريب منه، ثم أعد المحاولة.'); return; }
-      var out = new Float32Array(n), pos = 0;
-      c.bufs.forEach(function (b) { out.set(b, pos); pos += b.length; });
-      handleSamples(out, sr, 'تسجيل المايك');
-    }
-    btn.addEventListener('click', function () {
-      if (cap) { finish(); return; }
-      navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }).then(function (stream) {
-        var ctx = new AC();
-        if (ctx.resume) ctx.resume();
-        var src = ctx.createMediaStreamSource(stream);
-        var proc = ctx.createScriptProcessor(4096, 1, 1);
-        var mute = ctx.createGain(); mute.gain.value = 0;
-        var st = { ctx: ctx, src: src, proc: proc, stream: stream, bufs: [], peak: 0, level: 0, timer: null };
-        proc.onaudioprocess = function (e) {
-          var d = e.inputBuffer.getChannelData(0), m = 0;
-          for (var i = 0; i < d.length; i++) { var v = d[i] < 0 ? -d[i] : d[i]; if (v > m) m = v; }
-          st.bufs.push(new Float32Array(d));
-          st.level = m; if (m > st.peak) st.peak = m;
-        };
-        src.connect(proc); proc.connect(mute); mute.connect(ctx.destination);
-        cap = st;
-        var t0 = Date.now();
-        btn.classList.remove('primary'); btn.classList.add('recording');
-        st.timer = setInterval(function () {
-          label.textContent = 'إيقاف التسجيل ' + fmt((Date.now() - t0) / 1000) + (st.level < 0.01 ? ' · الصوت ضعيف' : ' · الصوت جيد');
-        }, 400);
-        label.textContent = 'إيقاف التسجيل 00:00';
-      }).catch(function () {
-        showError('لم يُسمح بالوصول إلى المايك. اسمح به من إعدادات الموقع في المتصفح ثم أعد المحاولة.');
-      });
-    });
+  if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
   }
-  if (STANDALONE) setupRecorder();
-
-  // opening state: a worked example so the first screen shows what the app does
-  setTimeout(function () { runDemo('mix'); }, 50);
 })();
-</script>
-
-<script>
-if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
-  window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
-}
 </script>
 </body>
 </html>
